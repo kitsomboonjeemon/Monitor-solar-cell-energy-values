@@ -47,18 +47,20 @@ function Dashboard2() {
     async (signal?: AbortSignal) => {
       try {
         // <-- ใช้ generic any เพื่อให้ TS ยอมรับโครงสร้างที่มาจาก server
-        const res = await api.get<any>("/api/hps/history", {
-          // axios + AbortSignal บางเวอร์ชันมี typing mismatch -> cast as any
-          signal: (signal as unknown) as any,
-          params: {
-            deviceSn,
-            type: isStringType ? "string" : "central",
-            startDate: rangePV[0].format("YYYY-MM-DD 00:00:00"),
-            endDate: rangePV[1].format("YYYY-MM-DD 23:59:59"),
-            pageNo: 1,
-            pageSize: 2000,
-          },
-        });
+        const config: any = {
+  signal,
+  params: {
+    deviceSn,
+    type: isStringType ? "string" : "central",
+    startDate: rangePV[0].format("YYYY-MM-DD 00:00:00"),
+    endDate: rangePV[1].format("YYYY-MM-DD 23:59:59"),
+    pageNo: 1,
+    pageSize: 2000,
+  },
+};
+
+const res = await api.get("/api/hps/history", config);
+
 
         // server อาจจะคืน data ใน res.data หรือ res.data.data ขึ้นกับ backend
         const data = res.data?.data ?? res.data ?? [];
