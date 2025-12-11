@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 
-
 // ----- Types -----
 type Summary = {
   pvEnergy: number;
@@ -65,8 +64,9 @@ function DashboardSummary() {
       setLoading(true);
       setError(null);
       try {
-      
-        const res = await api.get("/api/summary", { signal });
+        // <-- สำคัญ: บอก axios ว่า response เป็น any เพื่อให้ TS ไม่เตือน (แก้ error ที่บอกว่า property ไม่มี)
+        // และ cast { signal } เป็น any เพื่อหลีกเลี่ยงปัญหา typings ของ axios กับ AbortSignal
+        const res = await api.get<any>("/api/summary", { signal } as any);
 
         // safety parse
         const pv = toNumber(res.data?.pvEnergy, 0);
@@ -97,7 +97,7 @@ function DashboardSummary() {
 
         setLoading(false);
       } catch (err: any) {
-        if (err.name === "CanceledError" || err.name === "AbortError") {
+        if (err?.name === "CanceledError" || err?.name === "AbortError") {
           // request aborted -> ignore
           return;
         }

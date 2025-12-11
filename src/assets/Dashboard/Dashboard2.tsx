@@ -15,7 +15,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-import api from "../../api/axios"; 
+import api from "../../api/axios";
 
 const deviceSn = "YKD0F1022A";
 const isStringType = false;
@@ -46,8 +46,10 @@ function Dashboard2() {
   const fetchDataPV = useCallback(
     async (signal?: AbortSignal) => {
       try {
-        const res = await api.get("/api/hps/history", {
-          signal,
+        // <-- ใช้ generic any เพื่อให้ TS ยอมรับโครงสร้างที่มาจาก server
+        const res = await api.get<any>("/api/hps/history", {
+          // axios + AbortSignal บางเวอร์ชันมี typing mismatch -> cast as any
+          signal: (signal as unknown) as any,
           params: {
             deviceSn,
             type: isStringType ? "string" : "central",
@@ -58,23 +60,41 @@ function Dashboard2() {
           },
         });
 
-        const data = res.data?.data || [];
+        // server อาจจะคืน data ใน res.data หรือ res.data.data ขึ้นกับ backend
+        const data = res.data?.data ?? res.data ?? [];
+
+        // sort โดยแปลง time ให้เป็น timestamp ก่อน (รองรับ string / number)
+        const safeGetTime = (t: any) => {
+          if (typeof t === "number") return t;
+          if (typeof t === "string") {
+            const n = Number(t);
+            if (Number.isFinite(n)) return n;
+            const d = new Date(t);
+            if (!isNaN(d.getTime())) return d.getTime();
+            return 0;
+          }
+          if (t instanceof Date) return t.getTime();
+          return 0;
+        };
 
         const sorted = [...data].sort(
-          (a: any, b: any) =>
-            new Date(a.time).getTime() - new Date(b.time).getTime()
+          (a: any, b: any) => safeGetTime(a.time) - safeGetTime(b.time)
         );
 
-        const transformed: PVPoint[] = sorted.map((item: any) => ({
-          time: new Date(item.time).getTime(),
-          Power: toNumber(item.ppv1 ?? item.ppv, 0),
-          Voltage: toNumber(item.vpv, 0),
-          Current: toNumber(item.ipv, 0),
-        }));
+        const transformed: PVPoint[] = sorted.map((item: any) => {
+          const timestamp = safeGetTime(item.time);
+          return {
+            time: timestamp,
+            // บาง API ใช้ชื่อฟิลด์ต่างกัน: ppv1 หรือ ppv
+            Power: toNumber(item.ppv1 ?? item.ppv ?? item.power ?? item.PV ?? 0, 0),
+            Voltage: toNumber(item.vpv ?? item.voltage ?? item.Voltage ?? 0, 0),
+            Current: toNumber(item.ipv ?? item.current ?? item.Current ?? 0, 0),
+          };
+        });
 
         setHistoryPV(transformed);
       } catch (err: any) {
-        if (err.name === "CanceledError" || err.name === "AbortError") return;
+        if (err?.name === "CanceledError" || err?.name === "AbortError") return;
         console.error("❌ Error fetching PV data:", err);
         setHistoryPV([]);
       }
@@ -156,6 +176,7 @@ function Dashboard2() {
                 dataKey="Power"
                 stroke="#B4BA06"
                 name="PV Power (kW)"
+                dot={false}
               />
               <Line
                 xAxisId="main"
@@ -163,6 +184,7 @@ function Dashboard2() {
                 dataKey="Voltage"
                 stroke="#06BABA"
                 name="Voltage (V)"
+                dot={false}
               />
               <Line
                 xAxisId="main"
@@ -170,6 +192,7 @@ function Dashboard2() {
                 dataKey="Current"
                 stroke="#BA6006"
                 name="Current (A)"
+                dot={false}
               />
             </LineChart>
           </ResponsiveContainer>
