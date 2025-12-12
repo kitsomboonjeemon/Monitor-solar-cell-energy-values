@@ -86,6 +86,14 @@ function Dashboard2() {
       return resData.data.datas;
     if (resData.data && resData.data.items && Array.isArray(resData.data.items))
       return resData.data.items;
+    // sometimes API returns object with numeric keys { "0": {...}, "1": {...} }
+    const numericKeysArray =
+      typeof resData === "object" &&
+      Object.keys(resData).length > 0 &&
+      Object.keys(resData).every((k) => !isNaN(Number(k)))
+        ? Object.values(resData)
+        : null;
+    if (Array.isArray(numericKeysArray)) return numericKeysArray;
     const firstArray = Object.values(resData).find((v) => Array.isArray(v));
     if (firstArray) return firstArray as any[];
     return [];
@@ -116,9 +124,16 @@ function Dashboard2() {
 
         const res: any = await api.get(url, config);
 
-        // store raw for debugging
-        setRawResponse(res.data);
-        console.log("history raw response:", res.data);
+        // store raw for debugging (include status)
+        setRawResponse({ status: res.status, data: res.data });
+        console.log("history raw response:", { status: res.status, data: res.data });
+
+        // If server returned 204 No Content treat as empty array
+        if (res.status === 204 || res.data == null) {
+          console.warn("history: server returned no content (204 or null)");
+          setHistoryPV([]);
+          return;
+        }
 
         let dataArray = normalizeToArray(res.data);
 
@@ -142,7 +157,7 @@ function Dashboard2() {
         const mapped: PVPoint[] = (Array.isArray(dataArray) ? dataArray : [])
           .map((item: any) => {
             const timestamp = safeGetTime(
-              item.time ?? item.timestamp ?? item.ts ?? item.date ?? item.Time
+              item.time ?? item.timestamp ?? item.ts ?? item.date ?? item.Time ?? item.recordTime
             );
 
             // candidate keys for metrics (ใช้ toNumber เพื่อแปลงอย่างปลอดภัย)
