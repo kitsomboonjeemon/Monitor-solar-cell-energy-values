@@ -44,8 +44,9 @@ function Dashboard2() {
   const [historyPV, setHistoryPV] = useState<PVPoint[]>([]);
   const [loading, setLoading] = useState(false);
   const [rawResponse, setRawResponse] = useState<any>(null);
+  // **DEFAULT**: ตั้งค่าเริ่มต้นเป็นตั้งแต่ติดตั้งจนถึงวันนี้
   const [rangePV, setRangePV] = useState<RangeValue>([
-    dayjs().startOf("day"),
+    PLANT_INSTALL_DATE,
     dayjs().endOf("day"),
   ]);
   const [warned, setWarned] = useState(false);
@@ -105,18 +106,29 @@ function Dashboard2() {
     return [];
   };
 
+  /**
+   * fetchDataPV:
+   * - signal: AbortSignal
+   * - startOverride/endOverride: optional dayjs strings (YYYY-MM-DD) to avoid race with setState
+   */
   const fetchDataPV = useCallback(
-    async (signal?: AbortSignal) => {
+    async (
+      signal?: AbortSignal,
+      startOverride?: string,
+      endOverride?: string
+    ) => {
       setLoading(true);
       try {
+        const startDateParam = startOverride ?? rangePV[0].format("YYYY-MM-DD");
+        const endDateParam = endOverride ?? rangePV[1].format("YYYY-MM-DD");
+
         const config: any = {
           signal,
           params: {
             deviceSn,
             type: isStringType ? "string" : "central",
-            // send YYYY-MM-DD; backend normalizes
-            startDate: rangePV[0].format("YYYY-MM-DD"),
-            endDate: rangePV[1].format("YYYY-MM-DD"),
+            startDate: startDateParam,
+            endDate: endDateParam,
             pageNo: 1,
             pageSize: 2000,
           },
@@ -227,16 +239,19 @@ function Dashboard2() {
         setLoading(false);
       }
     },
+    // note: rangePV included because default path uses it when no overrides provided
     [rangePV, warned]
   );
 
   // initial + interval refresh (6 minutes)
   useEffect(() => {
     const controller = new AbortController();
-    fetchDataPV(controller.signal);
+    // initial fetch uses current rangePV (no overrides)
+    fetchDataPV(controller.signal).catch(() => {});
 
     const id = setInterval(() => {
       const c = new AbortController();
+      // use current rangePV
       fetchDataPV(c.signal).catch(() => {});
     }, 6 * 60 * 1000);
 
@@ -251,23 +266,22 @@ function Dashboard2() {
     return current && current > dayjs().endOf("day");
   };
 
-  // fallback: set range to last 7 days and fetch
+  // fallback: set range to last 7 days and fetch (use overrides so fetch uses correct dates immediately)
   const fetchLatestFallback = async () => {
     const end = dayjs().endOf("day");
     const start = dayjs().subtract(7, "day").startOf("day");
     setRangePV([start, end]);
-    // call fetch directly to load immediately
     const c = new AbortController();
-    await fetchDataPV(c.signal);
+    await fetchDataPV(c.signal, start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD"));
   };
 
-  // fetch from install -> today
+  // fetch from install -> today (use override)
   const fetchFromStart = async () => {
     const end = dayjs().endOf("day");
     const start = PLANT_INSTALL_DATE;
     setRangePV([start, end]);
     const c = new AbortController();
-    await fetchDataPV(c.signal);
+    await fetchDataPV(c.signal, start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD"));
   };
 
   return (
@@ -282,6 +296,11 @@ function Dashboard2() {
                 onChange={(val) => {
                   if (val && val[0] && val[1]) {
                     setRangePV(val as RangeValue);
+                    // fetch immediately using the selected dates (use overrides to avoid race)
+                    const start = (val as RangeValue)[0].format("YYYY-MM-DD");
+                    const end = (val as RangeValue)[1].format("YYYY-MM-DD");
+                    const c = new AbortController();
+                    fetchDataPV(c.signal, start, end).catch(() => {});
                   }
                 }}
                 format="YYYY-MM-DD"
@@ -307,7 +326,13 @@ function Dashboard2() {
                 แสดงข้อมูลล่าสุดที่มี
               </button>
               <button
-                onClick={() => setRangePV([dayjs().subtract(7, "day"), dayjs()])}
+                onClick={() => {
+                  const start = dayjs().subtract(7, "day").startOf("day");
+                  const end = dayjs().endOf("day");
+                  setRangePV([start, end]);
+                  const c = new AbortController();
+                  fetchDataPV(c.signal, start.format("YYYY-MM-DD"), end.format("YYYY-MM-DD")).catch(() => {});
+                }}
                 className="ml-2 px-3 py-1 border rounded"
               >
                 ลองย้อนหลัง 7 วัน
