@@ -31,6 +31,7 @@ type PVPoint = {
 
 type RangeValue = [Dayjs, Dayjs];
 
+// safe conversion helper (ใช้จริง)
 const toNumber = (v: any, fallback = 0): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
@@ -76,19 +77,17 @@ function Dashboard2() {
   };
 
   const normalizeToArray = (resData: any) => {
-    // Try many shapes
     if (resData == null) return [];
     if (Array.isArray(resData)) return resData;
     if (resData.data && Array.isArray(resData.data)) return resData.data;
-    if (resData.data && resData.data.data && Array.isArray(resData.data.data)) return resData.data.data;
-    // some APIs wrap again: { data: { datas: [...] } }
-    if (resData.data && resData.data.datas && Array.isArray(resData.data.datas)) return resData.data.datas;
-    // some APIs return { data: { items: [...] } }
-    if (resData.data && resData.data.items && Array.isArray(resData.data.items)) return resData.data.items;
-    // sometimes payload object holds array under first key
+    if (resData.data && resData.data.data && Array.isArray(resData.data.data))
+      return resData.data.data;
+    if (resData.data && resData.data.datas && Array.isArray(resData.data.datas))
+      return resData.data.datas;
+    if (resData.data && resData.data.items && Array.isArray(resData.data.items))
+      return resData.data.items;
     const firstArray = Object.values(resData).find((v) => Array.isArray(v));
     if (firstArray) return firstArray as any[];
-    // fallback: not an array
     return [];
   };
 
@@ -126,7 +125,6 @@ function Dashboard2() {
         if (!Array.isArray(dataArray) || dataArray.length === 0) {
           // still empty → try to convert single object to array (helpful for debugging)
           if (res.data && typeof res.data === "object") {
-            // if object with numeric keys -> convert
             const maybeArray = Object.keys(res.data).every((k) => !isNaN(Number(k)))
               ? Object.values(res.data)
               : null;
@@ -135,7 +133,10 @@ function Dashboard2() {
         }
 
         if (!Array.isArray(dataArray) || dataArray.length === 0) {
-          console.warn("history: unexpected data shape, normalized to array", res.data);
+          console.warn(
+            "history: unexpected data shape, normalized to array",
+            res.data
+          );
         }
 
         const mapped: PVPoint[] = (Array.isArray(dataArray) ? dataArray : [])
@@ -144,7 +145,7 @@ function Dashboard2() {
               item.time ?? item.timestamp ?? item.ts ?? item.date ?? item.Time
             );
 
-            // candidate keys for metrics
+            // candidate keys for metrics (ใช้ toNumber เพื่อแปลงอย่างปลอดภัย)
             const powerCandidates = [
               item.pvPower,
               item.ppv1,
@@ -172,8 +173,8 @@ function Dashboard2() {
 
             const pickFirstNumber = (cands: any[]) => {
               for (const v of cands) {
-                const n = Number(v);
-                if (Number.isFinite(n)) return n;
+                const n = toNumber(v, NaN);
+                if (!Number.isNaN(n)) return n;
               }
               return 0;
             };
