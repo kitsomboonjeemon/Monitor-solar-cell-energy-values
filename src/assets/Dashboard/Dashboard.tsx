@@ -65,40 +65,131 @@ function DashboardSummary() {
       setLoading(true);
       setError(null);
       try {
-        // axios supports AbortSignal in config (TS may need casting)
-        const res = await api.get<any>("/api/summary", { signal } as any);
+        // build url using env base if provided (supports absolute base), otherwise relative
+        const envBase = (import.meta.env as any).VITE_API_URL ?? "";
+        const base = String(envBase).replace(/\/$/, "");
+        const path = "/api/summary";
+        const url = base ? `${base}${path}` : path;
 
-        // safety parse
-        const pv = toNumber(res.data?.pvEnergy, 0);
-        const irradianceVal = toNumber(res.data?.irradiance, 0);
-        const backTemp = toNumber(res.data?.backplaneTemp, 0);
+        // cast to any so TS won't complain about res.data?.data
+        const res: any = await api.get(url, { signal } as any);
 
-        // social calc (example)
+        // backend might return { data: {...} } or {...}
+        const payload = res.data?.data ?? res.data ?? {};
+
+        // try multiple field names (some backends use different keys)
+        const pv =
+          toNumber(
+            payload.pvEnergy ??
+              payload.pv_energy ??
+              payload.pv_today ??
+              payload.ePV ??
+              payload.e_today ??
+              payload.electricity ??
+              0,
+            0
+          ) || 0;
+
+        const load =
+          toNumber(
+            payload.loadEnergy ??
+              payload.load_energy ??
+              payload.load_today ??
+              payload.load ??
+              0,
+            0
+          ) || 0;
+
+        const batCharge =
+          toNumber(
+            payload.batCharge ??
+              payload.bat_charge ??
+              payload.batteryCharge ??
+              payload.battery_charge ??
+              payload.chargeEnergy ??
+              0,
+            0
+          ) || 0;
+
+        const batDischarge =
+          toNumber(
+            payload.batDischarge ??
+              payload.bat_discharge ??
+              payload.batteryDischarge ??
+              payload.battery_discharge ??
+              payload.dischargeEnergy ??
+              0,
+            0
+          ) || 0;
+
+        // grid import/export may be named differently (egridToday / etoGridToday etc.)
+        const gridImport =
+          toNumber(
+            payload.gridImport ??
+              payload.grid_import ??
+              payload.egridToday ??
+              payload.importFromGrid ??
+              payload.import ??
+              0,
+            0
+          ) || 0;
+
+        const gridExport =
+          toNumber(
+            payload.gridExport ??
+              payload.grid_export ??
+              payload.etoGridToday ??
+              payload.exportToGrid ??
+              payload.export ??
+              0,
+            0
+          ) || 0;
+
+        // other fields
+        const outputFreqVal =
+          payload.outputFreq ?? payload.output_freq ?? payload.freq ?? null;
+        const irradianceVal =
+          payload.irradiance ??
+          payload.irradiance_wm2 ??
+          payload.pvRadiation ??
+          null;
+        const backTemp =
+          payload.backplaneTemp ?? payload.backplane_temp ?? payload.temp ?? null;
+
+        // social calculations (example)
         const co2ReducedKg = pv * 0.9;
         const ktoe = pv / 11630;
 
         setSummary({
           pvEnergy: pv,
-          loadEnergy: toNumber(res.data?.loadEnergy, 0),
-          batCharge: toNumber(res.data?.batCharge, 0),
-          batDischarge: toNumber(res.data?.batDischarge, 0),
-          gridImport: toNumber(res.data?.gridImport, 0),
-          gridExport: toNumber(res.data?.gridExport, 0),
+          loadEnergy: load,
+          batCharge,
+          batDischarge,
+          gridImport,
+          gridExport,
         });
 
         setOutputFreq(
-          res.data?.outputFreq !== undefined && res.data?.outputFreq !== null
-            ? toNumber(res.data.outputFreq, 0)
+          outputFreqVal !== undefined && outputFreqVal !== null
+            ? toNumber(outputFreqVal, 0)
             : null
         );
-        setSocial({ co2Reduced: co2ReducedKg, ktoe: ktoe });
-        setIrradiance(irradianceVal);
-        setBackplaneTemp(backTemp);
+        setSocial({ co2Reduced: co2ReducedKg, ktoe });
+        setIrradiance(
+          irradianceVal !== undefined && irradianceVal !== null
+            ? toNumber(irradianceVal, 0)
+            : null
+        );
+        setBackplaneTemp(
+          backTemp !== undefined && backTemp !== null
+            ? toNumber(backTemp, 0)
+            : null
+        );
 
         setLoading(false);
       } catch (err: any) {
         if (err?.name === "CanceledError" || err?.name === "AbortError") {
-          // request aborted -> ignore
+          // aborted -> ignore
           return;
         }
         console.error("❌ Failed to fetch summary:", err);
@@ -121,7 +212,6 @@ function DashboardSummary() {
     }, 6 * 60 * 1000);
 
     return () => {
-      // cleanup: abort outstanding requests and clear interval
       controller.abort();
       clearInterval(interval);
     };

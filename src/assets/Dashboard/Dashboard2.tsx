@@ -59,56 +59,71 @@ function Dashboard2() {
         };
 
         // BUILD endpoint using VITE_API_URL if provided
-        // VITE_API_URL can be empty (then use relative path and axios base)
         const envBase = (import.meta.env as any).VITE_API_URL ?? "";
         const base = String(envBase).replace(/\/$/, ""); // remove trailing slash
         const path = "/api/hps/history";
         const url = base ? `${base}${path}` : path; // if base empty -> relative path
 
-        // now fetch (cast res to any so TS is happy with res.data?.data)
+        // fetch
         const res: any = await api.get(url, config);
 
         // server might return data in res.data or res.data.data
         const data = res.data?.data ?? res.data ?? [];
 
-        // safe time parser
+        // robust safe time parser: support seconds / milliseconds / numeric string / ISO string / Date
         const safeGetTime = (t: any) => {
-          if (typeof t === "number") return t;
+          if (t == null) return 0;
+
+          // number: could be seconds (10 digits) or ms (13+ digits)
+          if (typeof t === "number") {
+            // seconds (e.g., 1_700_000_000) < 1e12 -> treat as seconds => convert to ms
+            if (t > 0 && t < 1e12) return Math.round(t * 1000);
+            return Math.round(t);
+          }
+
+          // string: try numeric first
           if (typeof t === "string") {
             const n = Number(t);
-            if (Number.isFinite(n)) return n;
+            if (Number.isFinite(n)) {
+              if (n > 0 && n < 1e12) return Math.round(n * 1000);
+              return Math.round(n);
+            }
+            // try ISO/date string parse
             const d = new Date(t);
             if (!isNaN(d.getTime())) return d.getTime();
             return 0;
           }
+
           if (t instanceof Date) return t.getTime();
+
           return 0;
         };
 
-        const sorted = [...data].sort(
-          (a: any, b: any) => safeGetTime(a.time) - safeGetTime(b.time)
-        );
+        // map and sort, but filter out invalid timestamps (<=0)
+        const mapped: PVPoint[] = (Array.isArray(data) ? data : [])
+          .map((item: any) => {
+            const timestamp = safeGetTime(item.time ?? item.timestamp ?? item.ts ?? item.date);
+            return {
+              time: timestamp,
+              Power: toNumber(
+                item.ppv1 ?? item.ppv ?? item.power ?? item.PV ?? item.pv ?? 0,
+                0
+              ),
+              Voltage: toNumber(
+                item.vpv ?? item.voltage ?? item.Voltage ?? 0,
+                0
+              ),
+              Current: toNumber(
+                item.ipv ?? item.current ?? item.Current ?? 0,
+                0
+              ),
+            } as PVPoint;
+          })
+          .filter((p) => p.time > 0); // remove invalid timestamps
 
-        const transformed: PVPoint[] = sorted.map((item: any) => {
-          const timestamp = safeGetTime(item.time);
-          return {
-            time: timestamp,
-            Power: toNumber(
-              item.ppv1 ?? item.ppv ?? item.power ?? item.PV ?? 0,
-              0
-            ),
-            Voltage: toNumber(
-              item.vpv ?? item.voltage ?? item.Voltage ?? 0,
-              0
-            ),
-            Current: toNumber(
-              item.ipv ?? item.current ?? item.Current ?? 0,
-              0
-            ),
-          };
-        });
+        const sorted = [...mapped].sort((a, b) => a.time - b.time);
 
-        setHistoryPV(transformed);
+        setHistoryPV(sorted);
       } catch (err: any) {
         if (err?.name === "CanceledError" || err?.name === "AbortError")
           return;
