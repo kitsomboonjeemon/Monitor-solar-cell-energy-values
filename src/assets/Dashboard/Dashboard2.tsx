@@ -46,7 +46,6 @@ function Dashboard2() {
   const fetchDataPV = useCallback(
     async (signal?: AbortSignal) => {
       try {
-        // <-- ใช้ generic any เพื่อให้ TS ยอมรับโครงสร้างที่มาจาก server
         const config: any = {
           signal,
           params: {
@@ -59,13 +58,20 @@ function Dashboard2() {
           },
         };
 
-        // เปลี่ยนตรงนี้เป็น any เพื่อให้ res.data?.data ทำงานได้โดยไม่ error
-        const res: any = await api.get("/api/hps/history", config);
+        // BUILD endpoint using VITE_API_URL if provided
+        // VITE_API_URL can be empty (then use relative path and axios base)
+        const envBase = (import.meta.env as any).VITE_API_URL ?? "";
+        const base = String(envBase).replace(/\/$/, ""); // remove trailing slash
+        const path = "/api/hps/history";
+        const url = base ? `${base}${path}` : path; // if base empty -> relative path
 
-        // server อาจจะคืน data ใน res.data หรือ res.data.data ขึ้นกับ backend
+        // now fetch (cast res to any so TS is happy with res.data?.data)
+        const res: any = await api.get(url, config);
+
+        // server might return data in res.data or res.data.data
         const data = res.data?.data ?? res.data ?? [];
 
-        // sort โดยแปลง time ให้เป็น timestamp ก่อน (รองรับ string / number)
+        // safe time parser
         const safeGetTime = (t: any) => {
           if (typeof t === "number") return t;
           if (typeof t === "string") {
@@ -87,16 +93,25 @@ function Dashboard2() {
           const timestamp = safeGetTime(item.time);
           return {
             time: timestamp,
-            // บาง API ใช้ชื่อฟิลด์ต่างกัน: ppv1 หรือ ppv
-            Power: toNumber(item.ppv1 ?? item.ppv ?? item.power ?? item.PV ?? 0, 0),
-            Voltage: toNumber(item.vpv ?? item.voltage ?? item.Voltage ?? 0, 0),
-            Current: toNumber(item.ipv ?? item.current ?? item.Current ?? 0, 0),
+            Power: toNumber(
+              item.ppv1 ?? item.ppv ?? item.power ?? item.PV ?? 0,
+              0
+            ),
+            Voltage: toNumber(
+              item.vpv ?? item.voltage ?? item.Voltage ?? 0,
+              0
+            ),
+            Current: toNumber(
+              item.ipv ?? item.current ?? item.Current ?? 0,
+              0
+            ),
           };
         });
 
         setHistoryPV(transformed);
       } catch (err: any) {
-        if (err?.name === "CanceledError" || err?.name === "AbortError") return;
+        if (err?.name === "CanceledError" || err?.name === "AbortError")
+          return;
         console.error("❌ Error fetching PV data:", err);
         setHistoryPV([]);
       }
@@ -104,7 +119,7 @@ function Dashboard2() {
     [rangePV]
   );
 
-  // 📌 รีเฟรช PV ทุก 6 นาที
+  // refresh every 6 minutes
   useEffect(() => {
     const controller = new AbortController();
 

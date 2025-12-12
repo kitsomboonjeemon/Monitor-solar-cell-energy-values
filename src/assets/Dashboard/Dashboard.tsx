@@ -17,7 +17,8 @@ type Social = {
 };
 
 // ----- axios instance -----
-const apiBase = import.meta.env.VITE_API_BASE_URL || "/";
+// Use VITE_API_URL (recommended) or fallback to root "/"
+const apiBase = (import.meta.env as any).VITE_API_URL || "/";
 const api = axios.create({
   baseURL: apiBase,
   timeout: 15000,
@@ -56,7 +57,7 @@ function DashboardSummary() {
   const [irradiance, setIrradiance] = useState<number | null>(null);
   const [backplaneTemp, setBackplaneTemp] = useState<number | null>(null);
 
-  const [, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchSummary = useCallback(
@@ -64,8 +65,7 @@ function DashboardSummary() {
       setLoading(true);
       setError(null);
       try {
-        // <-- สำคัญ: บอก axios ว่า response เป็น any เพื่อให้ TS ไม่เตือน (แก้ error ที่บอกว่า property ไม่มี)
-        // และ cast { signal } เป็น any เพื่อหลีกเลี่ยงปัญหา typings ของ axios กับ AbortSignal
+        // axios supports AbortSignal in config (TS may need casting)
         const res = await api.get<any>("/api/summary", { signal } as any);
 
         // safety parse
