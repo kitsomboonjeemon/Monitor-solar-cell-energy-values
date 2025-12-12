@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { DatePicker, Space } from "antd";
-import dayjs from "dayjs";
+import dayjs, { Dayjs } from "dayjs";
 import "dayjs/locale/th";
 dayjs.locale("th");
 
@@ -20,29 +20,36 @@ import api from "../../api/axios";
 const deviceSn = "YKD0F1022A";
 const isStringType = false;
 
-function Dashboard2() {
-  const [historyPV, setHistoryPV] = useState<any[]>([]);
+type PVPoint = {
+  time: number;
+  Power: number;
+  Voltage: number;
+  Current: number;
+};
 
-  // 👉 ค่าเริ่มต้น = วันนี้
-  const [rangePV, setRangePV] = useState([
+function Dashboard2() {
+  const [historyPV, setHistoryPV] = useState<PVPoint[]>([]);
+
+  const [rangePV, setRangePV] = useState<[Dayjs, Dayjs]>([
     dayjs().startOf("day"),
     dayjs().endOf("day"),
   ]);
 
   const fetchDataPV = async () => {
     try {
-      const res = await api.get("/api/hps/history", {
+      // ⭐ จุดสำคัญ: cast เป็น any
+      const res = (await api.get("/api/hps/history", {
         params: {
           deviceSn,
           type: isStringType ? "string" : "central",
           startDate: rangePV[0].format("YYYY-MM-DD"),
           endDate: rangePV[1].format("YYYY-MM-DD"),
         },
-      });
+      })) as any;
 
-      const data = Array.isArray(res.data?.data) ? res.data.data : [];
+      const data = Array.isArray(res?.data?.data) ? res.data.data : [];
 
-      const transformed = data
+      const transformed: PVPoint[] = data
         .map((item: any) => {
           const t = new Date(item.time).getTime();
           if (!t) return null;
@@ -73,7 +80,6 @@ function Dashboard2() {
   // 🔄 โหลด + รีเฟรชทุก 6 นาที
   useEffect(() => {
     fetchDataPV();
-
     const interval = setInterval(fetchDataPV, 6 * 60 * 1000);
     return () => clearInterval(interval);
   }, [rangePV]);
@@ -86,11 +92,11 @@ function Dashboard2() {
 
           <Space>
             <DatePicker.RangePicker
-              value={rangePV as any}
+              value={rangePV}
               format="YYYY-MM-DD"
               allowClear={false}
               onChange={(val) => {
-                if (val) setRangePV(val as any);
+                if (val) setRangePV(val as [Dayjs, Dayjs]);
               }}
             />
           </Space>
