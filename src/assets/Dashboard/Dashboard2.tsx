@@ -1,3 +1,4 @@
+// src/pages/Dashboard2.tsx
 import { useCallback, useEffect, useState } from "react";
 import { DatePicker, Space } from "antd";
 import dayjs, { Dayjs } from "dayjs";
@@ -34,6 +35,7 @@ export default function Dashboard2() {
     INSTALL_DATE,
     dayjs().endOf("day"),
   ]);
+
   const [data, setData] = useState<PV[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -62,15 +64,11 @@ export default function Dashboard2() {
       const end = range[1].format("YYYY-MM-DD");
 
       const res = await api.get("/api/hps/history", {
-        params: {
-          deviceSn,
-          type: "central",
-          startDate: start,
-          endDate: end,
-        },
+        params: { deviceSn, type: "central", startDate: start, endDate: end },
       });
 
-      const arr = Array.isArray(res.data?.data) ? res.data.data : [];
+      const raw: any = res.data;
+      const arr: any[] = Array.isArray(raw?.data) ? raw.data : [];
 
       const mapped: PV[] = arr.map((item: any) => ({
         time: normalizeTime(item.time),
@@ -89,26 +87,28 @@ export default function Dashboard2() {
     }
   }, [range]);
 
-  /** โหลดข้อมูล real-time และ merge เข้ากราฟ */
+  /** โหลดข้อมูล real-time */
   const fetchRealtime = useCallback(async () => {
     try {
       const res = await api.get("/api/hps", {
         params: { deviceSn },
       });
 
-      const t = Date.now();
+      const rt: any = res.data;
 
       const point: PV = {
-        time: t,
-        pvPower: parseNumber(res.data?.pvPower),
-        pvVoltage: parseNumber(res.data?.pvVoltage),
-        pvCurrent: parseNumber(res.data?.pvCurrent),
+        time: Date.now(),
+        pvPower: parseNumber(rt?.pvPower),
+        pvVoltage: parseNumber(rt?.pvVoltage),
+        pvCurrent: parseNumber(rt?.pvCurrent),
       };
 
       setData((prev) =>
         [...prev, point].sort((a, b) => a.time - b.time)
       );
-    } catch {}
+    } catch (err) {
+      console.log("Realtime fetch error:", err);
+    }
   }, []);
 
   /** โหลดย้อนหลังครั้งแรก */
@@ -157,18 +157,22 @@ export default function Dashboard2() {
         <ResponsiveContainer width="100%" height={400}>
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" />
+
             <XAxis
               dataKey="time"
               type="number"
               domain={["dataMin", "dataMax"]}
               tickFormatter={(v) => dayjs(v).format("DD/MM HH:mm")}
             />
+
             <YAxis />
+
             <Tooltip
               labelFormatter={(v) =>
                 dayjs(v).format("YYYY-MM-DD HH:mm:ss")
               }
             />
+
             <Legend />
 
             <Line
@@ -178,6 +182,7 @@ export default function Dashboard2() {
               stroke="#B4BA06"
               dot={false}
             />
+
             <Line
               type="monotone"
               dataKey="pvVoltage"
@@ -185,6 +190,7 @@ export default function Dashboard2() {
               stroke="#06BABA"
               dot={false}
             />
+
             <Line
               type="monotone"
               dataKey="pvCurrent"
