@@ -31,11 +31,6 @@ type PVPoint = {
 
 type RangeValue = [Dayjs, Dayjs];
 
-const toNumber = (v: any, fallback = 0): number => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-};
-
 function Dashboard2() {
   const [historyPV, setHistoryPV] = useState<PVPoint[]>([]);
   const [loading, setLoading] = useState(false);
