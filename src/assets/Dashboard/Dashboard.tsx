@@ -57,7 +57,7 @@ function DashboardSummary() {
   const [irradiance, setIrradiance] = useState<number | null>(null);
   const [backplaneTemp, setBackplaneTemp] = useState<number | null>(null);
 
-  const [loading, setLoading] = useState<boolean>(true);
+  const [, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchSummary = useCallback(
