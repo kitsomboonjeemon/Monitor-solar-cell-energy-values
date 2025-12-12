@@ -37,6 +37,9 @@ const toNumber = (v: any, fallback = 0): number => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+// plant install date (ปรับได้ถ้าจำเป็น)
+const PLANT_INSTALL_DATE = dayjs("2024-06-04").startOf("day");
+
 function Dashboard2() {
   const [historyPV, setHistoryPV] = useState<PVPoint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -45,6 +48,7 @@ function Dashboard2() {
     dayjs().startOf("day"),
     dayjs().endOf("day"),
   ]);
+  const [warned, setWarned] = useState(false);
 
   // safe time parser: accepts seconds, ms, numeric strings, ISO, "YYYY-MM-DD HH:mm:ss"
   const safeGetTime = (t: any) => {
@@ -78,15 +82,17 @@ function Dashboard2() {
 
   const normalizeToArray = (resData: any) => {
     if (resData == null) return [];
+    // If server returns wrapper { status: 200, data: [...] }
+    if (resData.data !== undefined && Array.isArray(resData.data)) return resData.data;
+    // If it's already array
     if (Array.isArray(resData)) return resData;
-    if (resData.data && Array.isArray(resData.data)) return resData.data;
     if (resData.data && resData.data.data && Array.isArray(resData.data.data))
       return resData.data.data;
     if (resData.data && resData.data.datas && Array.isArray(resData.data.datas))
       return resData.data.datas;
     if (resData.data && resData.data.items && Array.isArray(resData.data.items))
       return resData.data.items;
-    // sometimes API returns object with numeric keys { "0": {...}, "1": {...} }
+    // Numeric-keyed object like { "0": {...}, "1": {...} }
     const numericKeysArray =
       typeof resData === "object" &&
       Object.keys(resData).length > 0 &&
@@ -125,13 +131,18 @@ function Dashboard2() {
         const res: any = await api.get(url, config);
 
         // store raw for debugging (include status)
-        setRawResponse({ status: res.status, data: res.data });
-        console.log("history raw response:", { status: res.status, data: res.data });
+        const savedRaw = { status: res?.status ?? 200, data: res?.data ?? null };
+        setRawResponse(savedRaw);
+        console.log("history raw response:", savedRaw);
 
         // If server returned 204 No Content treat as empty array
         if (res.status === 204 || res.data == null) {
-          console.warn("history: server returned no content (204 or null)");
+          if (!warned) {
+            console.warn("history: server returned no content (204 or null)");
+            setWarned(true);
+          }
           setHistoryPV([]);
+          setLoading(false);
           return;
         }
 
@@ -148,10 +159,10 @@ function Dashboard2() {
         }
 
         if (!Array.isArray(dataArray) || dataArray.length === 0) {
-          console.warn(
-            "history: unexpected data shape, normalized to array",
-            res.data
-          );
+          if (!warned) {
+            console.warn("history: unexpected data shape, normalized to array", res.data);
+            setWarned(true);
+          }
         }
 
         const mapped: PVPoint[] = (Array.isArray(dataArray) ? dataArray : [])
@@ -216,7 +227,7 @@ function Dashboard2() {
         setLoading(false);
       }
     },
-    [rangePV]
+    [rangePV, warned]
   );
 
   // initial + interval refresh (6 minutes)
@@ -235,6 +246,30 @@ function Dashboard2() {
     };
   }, [fetchDataPV]);
 
+  // disable future dates
+  const disableFuture = (current: Dayjs) => {
+    return current && current > dayjs().endOf("day");
+  };
+
+  // fallback: set range to last 7 days and fetch
+  const fetchLatestFallback = async () => {
+    const end = dayjs().endOf("day");
+    const start = dayjs().subtract(7, "day").startOf("day");
+    setRangePV([start, end]);
+    // call fetch directly to load immediately
+    const c = new AbortController();
+    await fetchDataPV(c.signal);
+  };
+
+  // fetch from install -> today
+  const fetchFromStart = async () => {
+    const end = dayjs().endOf("day");
+    const start = PLANT_INSTALL_DATE;
+    setRangePV([start, end]);
+    const c = new AbortController();
+    await fetchDataPV(c.signal);
+  };
+
   return (
     <div className="flex justify-center items-center w-full mt-[2%] mb-[2%]">
       <div className="bg-[#ffffff] p-[2%] rounded-[20px] shadow w-[90%]">
@@ -251,6 +286,7 @@ function Dashboard2() {
                 }}
                 format="YYYY-MM-DD"
                 allowClear={false}
+                disabledDate={disableFuture}
               />
             </Space>
           </div>
@@ -260,7 +296,30 @@ function Dashboard2() {
           <div className="text-center text-gray-400">Loading…</div>
         ) : historyPV.length === 0 ? (
           <div className="text-center text-gray-400">
-            ไม่มีข้อมูล PV
+            ไม่มีข้อมูล PV ในช่วงวันที่{" "}
+            <strong>{rangePV[0].format("YYYY-MM-DD")}</strong> –{" "}
+            <strong>{rangePV[1].format("YYYY-MM-DD")}</strong>
+            <div className="mt-2">
+              <button
+                onClick={() => fetchLatestFallback()}
+                className="px-3 py-1 border rounded"
+              >
+                แสดงข้อมูลล่าสุดที่มี
+              </button>
+              <button
+                onClick={() => setRangePV([dayjs().subtract(7, "day"), dayjs()])}
+                className="ml-2 px-3 py-1 border rounded"
+              >
+                ลองย้อนหลัง 7 วัน
+              </button>
+              <button
+                onClick={() => fetchFromStart()}
+                className="ml-2 px-3 py-1 border rounded"
+              >
+                ย้อนหลังตั้งแต่เริ่ม
+              </button>
+            </div>
+
             {rawResponse ? (
               <div className="mt-4 text-left text-xs text-gray-600">
                 <strong>Raw response (for debug):</strong>
