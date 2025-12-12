@@ -16,8 +16,8 @@ type Social = {
   ktoe: number;
 };
 
-// ===== axios instance (สำคัญ) =====
-// backend ของคุณคือ /api/summary
+// ===== axios instance (แก้ api ซ้ำตรงนี้) =====
+// backend: http(s)://<host>/api/summary
 const api = axios.create({
   baseURL: "/api",
   timeout: 15000,
@@ -54,63 +54,70 @@ function DashboardSummary() {
   const [irradiance, setIrradiance] = useState<number | null>(null);
   const [backplaneTemp, setBackplaneTemp] = useState<number | null>(null);
 
+  const [, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   // ===== FETCH SUMMARY =====
-  const fetchSummary = useCallback(async (signal?: AbortSignal) => {
-    try {
-      setError(null);
+  const fetchSummary = useCallback(
+    async (signal?: AbortSignal) => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      // ⭐ เรียกสั้น ๆ พอ
-      const res: any = await api.get("/summary", { signal });
+        // ✅ เรียกสั้น ๆ ไม่ซ้ำ
+        const res = await api.get("/summary", { signal });
+        const payload = res.data ?? {};
 
-      const payload = res.data ?? {};
+        const pv = toNumber(payload.pvEnergy);
+        const load = toNumber(payload.loadEnergy);
+        const batCharge = toNumber(payload.batCharge);
+        const batDischarge = toNumber(payload.batDischarge);
+        const gridImport = toNumber(payload.gridImport);
+        const gridExport = toNumber(payload.gridExport);
 
-      const pv = toNumber(payload.pvEnergy);
-      const load = toNumber(payload.loadEnergy);
-      const batCharge = toNumber(payload.batCharge);
-      const batDischarge = toNumber(payload.batDischarge);
-      const gridImport = toNumber(payload.gridImport);
-      const gridExport = toNumber(payload.gridExport);
+        setSummary({
+          pvEnergy: pv,
+          loadEnergy: load,
+          batCharge,
+          batDischarge,
+          gridImport,
+          gridExport,
+        });
 
-      setSummary({
-        pvEnergy: pv,
-        loadEnergy: load,
-        batCharge,
-        batDischarge,
-        gridImport,
-        gridExport,
-      });
+        setOutputFreq(
+          payload.outputFreq !== undefined
+            ? toNumber(payload.outputFreq)
+            : null
+        );
 
-      setOutputFreq(
-        payload.outputFreq !== undefined
-          ? toNumber(payload.outputFreq)
-          : null
-      );
+        setIrradiance(
+          payload.irradiance !== undefined
+            ? toNumber(payload.irradiance)
+            : null
+        );
 
-      setIrradiance(
-        payload.irradiance !== undefined
-          ? toNumber(payload.irradiance)
-          : null
-      );
+        setBackplaneTemp(
+          payload.backplaneTemp !== undefined
+            ? toNumber(payload.backplaneTemp)
+            : null
+        );
 
-      setBackplaneTemp(
-        payload.backplaneTemp !== undefined
-          ? toNumber(payload.backplaneTemp)
-          : null
-      );
+        // social
+        setSocial({
+          co2Reduced: pv * 0.9,
+          ktoe: pv / 11630,
+        });
 
-      // social
-      setSocial({
-        co2Reduced: pv * 0.9,
-        ktoe: pv / 11630,
-      });
-    } catch (err: any) {
-      if (err?.name === "CanceledError") return;
-      console.error("❌ fetch summary error:", err);
-      setError("ไม่สามารถดึงข้อมูลได้");
-    }
-  }, []);
+        setLoading(false);
+      } catch (err: any) {
+        if (err?.name === "CanceledError" || err?.name === "AbortError") return;
+        console.error("❌ Failed to fetch summary:", err);
+        setError("ไม่สามารถดึงข้อมูลได้");
+        setLoading(false);
+      }
+    },
+    []
+  );
 
   // ===== AUTO REFRESH =====
   useEffect(() => {
@@ -129,12 +136,12 @@ function DashboardSummary() {
   }, [fetchSummary]);
 
   // ----- render helpers -----
-  const pvDisplay = () => formatNumber(summary.pvEnergy);
-  const loadDisplay = () => formatNumber(summary.loadEnergy);
-  const batChargeDisplay = () => formatNumber(summary.batCharge);
-  const batDischargeDisplay = () => formatNumber(summary.batDischarge);
-  const gridImportDisplay = () => formatNumber(summary.gridImport);
-  const gridExportDisplay = () => formatNumber(summary.gridExport);
+  const pvDisplay = () => formatNumber(summary.pvEnergy, 1);
+  const loadDisplay = () => formatNumber(summary.loadEnergy, 1);
+  const batChargeDisplay = () => formatNumber(summary.batCharge, 1);
+  const batDischargeDisplay = () => formatNumber(summary.batDischarge, 1);
+  const gridImportDisplay = () => formatNumber(summary.gridImport, 1);
+  const gridExportDisplay = () => formatNumber(summary.gridExport, 1);
   const outputFreqDisplay = () =>
     outputFreq !== null ? formatNumber(outputFreq, 2) : "--";
   const irradianceDisplay = () =>
@@ -144,14 +151,12 @@ function DashboardSummary() {
   const co2Display = () => formatNumber(social.co2Reduced, 1);
   const ktoeDisplay = () => formatNumber(social.ktoe, 5);
 
-  // ===== UI (เหมือนเดิม) =====
+  // ===== UI (เดิมทั้งหมด) =====
   return (
     <div className="flex px-[2%] mt-[3%]">
-      {/* UI ของคุณใช้ต่อได้ทั้งหมด */}
-      {/* ไม่มีการเปลี่ยน layout */}
-      {/* error */}
+      {/* UI ของคุณเหมือนเดิมทั้งหมด */}
       {error && (
-        <p className="text-red-500 text-sm mt-2">
+        <p className="text-red-500 mt-2 text-sm">
           เกิดข้อผิดพลาด: {error}
         </p>
       )}
