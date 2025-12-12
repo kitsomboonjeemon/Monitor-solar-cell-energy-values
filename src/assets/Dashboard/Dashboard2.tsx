@@ -31,9 +31,15 @@ type PVPoint = {
 
 type RangeValue = [Dayjs, Dayjs];
 
+const toNumber = (v: any, fallback = 0): number => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+};
+
 function Dashboard2() {
   const [historyPV, setHistoryPV] = useState<PVPoint[]>([]);
   const [loading, setLoading] = useState(false);
+  const [rawResponse, setRawResponse] = useState<any>(null);
   const [rangePV, setRangePV] = useState<RangeValue>([
     dayjs().startOf("day"),
     dayjs().endOf("day"),
@@ -69,6 +75,23 @@ function Dashboard2() {
     return 0;
   };
 
+  const normalizeToArray = (resData: any) => {
+    // Try many shapes
+    if (resData == null) return [];
+    if (Array.isArray(resData)) return resData;
+    if (resData.data && Array.isArray(resData.data)) return resData.data;
+    if (resData.data && resData.data.data && Array.isArray(resData.data.data)) return resData.data.data;
+    // some APIs wrap again: { data: { datas: [...] } }
+    if (resData.data && resData.data.datas && Array.isArray(resData.data.datas)) return resData.data.datas;
+    // some APIs return { data: { items: [...] } }
+    if (resData.data && resData.data.items && Array.isArray(resData.data.items)) return resData.data.items;
+    // sometimes payload object holds array under first key
+    const firstArray = Object.values(resData).find((v) => Array.isArray(v));
+    if (firstArray) return firstArray as any[];
+    // fallback: not an array
+    return [];
+  };
+
   const fetchDataPV = useCallback(
     async (signal?: AbortSignal) => {
       setLoading(true);
@@ -94,18 +117,28 @@ function Dashboard2() {
 
         const res: any = await api.get(url, config);
 
-        // possible shapes: res.data, res.data.data, res.data.data.data
-        let data = res?.data ?? [];
-        if (res?.data?.data) data = res.data.data;
-        if (res?.data?.data?.data) data = res.data.data.data;
+        // store raw for debugging
+        setRawResponse(res.data);
+        console.log("history raw response:", res.data);
 
-        if (!Array.isArray(data)) {
-          // maybe server returned object with single item? attempt to normalize
-          console.warn("history: unexpected data shape, normalized to array", data);
-          data = Array.isArray(data) ? data : [];
+        let dataArray = normalizeToArray(res.data);
+
+        if (!Array.isArray(dataArray) || dataArray.length === 0) {
+          // still empty → try to convert single object to array (helpful for debugging)
+          if (res.data && typeof res.data === "object") {
+            // if object with numeric keys -> convert
+            const maybeArray = Object.keys(res.data).every((k) => !isNaN(Number(k)))
+              ? Object.values(res.data)
+              : null;
+            if (Array.isArray(maybeArray)) dataArray = maybeArray;
+          }
         }
 
-        const mapped: PVPoint[] = (data as any[])
+        if (!Array.isArray(dataArray) || dataArray.length === 0) {
+          console.warn("history: unexpected data shape, normalized to array", res.data);
+        }
+
+        const mapped: PVPoint[] = (Array.isArray(dataArray) ? dataArray : [])
           .map((item: any) => {
             const timestamp = safeGetTime(
               item.time ?? item.timestamp ?? item.ts ?? item.date ?? item.Time
@@ -176,12 +209,8 @@ function Dashboard2() {
     fetchDataPV(controller.signal);
 
     const id = setInterval(() => {
-      // create a fresh controller for each request to let previous abort if needed
       const c = new AbortController();
-      fetchDataPV(c.signal).catch(() => {
-        /* ignore */
-      });
-      // no need to store c here (we rely on GC + request lifecycle)
+      fetchDataPV(c.signal).catch(() => {});
     }, 6 * 60 * 1000);
 
     return () => {
@@ -214,7 +243,17 @@ function Dashboard2() {
         {loading && historyPV.length === 0 ? (
           <div className="text-center text-gray-400">Loading…</div>
         ) : historyPV.length === 0 ? (
-          <div className="text-center text-gray-400">ไม่มีข้อมูล PV</div>
+          <div className="text-center text-gray-400">
+            ไม่มีข้อมูล PV
+            {rawResponse ? (
+              <div className="mt-4 text-left text-xs text-gray-600">
+                <strong>Raw response (for debug):</strong>
+                <pre style={{ maxHeight: 300, overflow: "auto" }}>
+                  {JSON.stringify(rawResponse, null, 2)}
+                </pre>
+              </div>
+            ) : null}
+          </div>
         ) : (
           <ResponsiveContainer width="100%" height={400}>
             <LineChart data={historyPV}>
