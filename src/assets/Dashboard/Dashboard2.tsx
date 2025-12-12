@@ -48,19 +48,19 @@ function Dashboard2() {
       try {
         // <-- ใช้ generic any เพื่อให้ TS ยอมรับโครงสร้างที่มาจาก server
         const config: any = {
-  signal,
-  params: {
-    deviceSn,
-    type: isStringType ? "string" : "central",
-    startDate: rangePV[0].format("YYYY-MM-DD 00:00:00"),
-    endDate: rangePV[1].format("YYYY-MM-DD 23:59:59"),
-    pageNo: 1,
-    pageSize: 2000,
-  },
-};
+          signal,
+          params: {
+            deviceSn,
+            type: isStringType ? "string" : "central",
+            startDate: rangePV[0].format("YYYY-MM-DD 00:00:00"),
+            endDate: rangePV[1].format("YYYY-MM-DD 23:59:59"),
+            pageNo: 1,
+            pageSize: 2000,
+          },
+        };
 
-const res = await api.get("/api/hps/history", config);
-
+        // เปลี่ยนตรงนี้เป็น any เพื่อให้ res.data?.data ทำงานได้โดยไม่ error
+        const res: any = await api.get("/api/hps/history", config);
 
         // server อาจจะคืน data ใน res.data หรือ res.data.data ขึ้นกับ backend
         const data = res.data?.data ?? res.data ?? [];
