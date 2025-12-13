@@ -16,10 +16,20 @@ type Social = {
   ktoe: number;
 };
 
+// ✅ API response type (สำคัญมาก)
+type SummaryApiResponse = {
+  pvEnergy?: number;
+  loadEnergy?: number;
+  batCharge?: number;
+  batDischarge?: number;
+  gridImport?: number;
+  gridExport?: number;
+  outputFreq?: number;
+  irradiance?: number;
+  backplaneTemp?: number;
+};
+
 // ================= AXIOS =================
-// .env example:
-// VITE_API_URL=/api
-// Final endpoint => /api/summary
 const api = axios.create({
   baseURL: (import.meta.env as any).VITE_API_URL || "/api",
   timeout: 15000,
@@ -56,77 +66,64 @@ function DashboardSummary() {
   const [backplaneTemp, setBackplaneTemp] = useState<number | null>(null);
   const [social, setSocial] = useState<Social>({ co2Reduced: 0, ktoe: 0 });
 
-  const [, setLoading] = useState<boolean>(true);
+  const [, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // ================= FETCH SUMMARY =================
- const fetchSummary = useCallback(async (signal?: AbortSignal) => {
-  try {
-    setLoading(true);
-    setError(null);
+  const fetchSummary = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-    const res = await api.get("/summary", { signal });
+      const res = await api.get("/summary");
+      const payload: SummaryApiResponse = res.data ?? {};
 
-    const payload: SummaryApiResponse = res.data ?? {};
+      const pv = toNumber(payload.pvEnergy);
+      const load = toNumber(payload.loadEnergy);
+      const batCharge = toNumber(payload.batCharge);
+      const batDischarge = toNumber(payload.batDischarge);
+      const gridImport = toNumber(payload.gridImport);
+      const gridExport = toNumber(payload.gridExport);
 
-    const pv = toNumber(payload.pvEnergy);
-    const load = toNumber(payload.loadEnergy);
-    const batCharge = toNumber(payload.batCharge);
-    const batDischarge = toNumber(payload.batDischarge);
-    const gridImport = toNumber(payload.gridImport);
-    const gridExport = toNumber(payload.gridExport);
+      setSummary({
+        pvEnergy: pv,
+        loadEnergy: load,
+        batCharge,
+        batDischarge,
+        gridImport,
+        gridExport,
+      });
 
-    setSummary({
-      pvEnergy: pv,
-      loadEnergy: load,
-      batCharge,
-      batDischarge,
-      gridImport,
-      gridExport,
-    });
+      setOutputFreq(
+        payload.outputFreq != null ? toNumber(payload.outputFreq) : null
+      );
+      setIrradiance(
+        payload.irradiance != null ? toNumber(payload.irradiance) : null
+      );
+      setBackplaneTemp(
+        payload.backplaneTemp != null
+          ? toNumber(payload.backplaneTemp)
+          : null
+      );
 
-    setOutputFreq(
-      payload.outputFreq != null ? toNumber(payload.outputFreq) : null
-    );
-
-    setIrradiance(
-      payload.irradiance != null ? toNumber(payload.irradiance) : null
-    );
-
-    setBackplaneTemp(
-      payload.backplaneTemp != null
-        ? toNumber(payload.backplaneTemp)
-        : null
-    );
-
-    setSocial({
-      co2Reduced: pv * 0.9,
-      ktoe: pv / 11630,
-    });
-  } catch (err: any) {
-    if (err?.name === "CanceledError" || err?.name === "AbortError") return;
-    console.error("❌ fetch summary error:", err);
-    setError("ไม่สามารถดึงข้อมูลได้");
-  } finally {
-    setLoading(false);
-  }
-}, []);
-
+      setSocial({
+        co2Reduced: pv * 0.9,
+        ktoe: pv / 11630,
+      });
+    } catch (err) {
+      console.error("❌ fetch summary error:", err);
+      setError("ไม่สามารถดึงข้อมูลได้");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   // ================= AUTO REFRESH =================
   useEffect(() => {
-    const controller = new AbortController();
+    fetchSummary();
 
-    fetchSummary(controller.signal);
-
-    const interval = setInterval(() => {
-      fetchSummary(controller.signal);
-    }, 6 * 60 * 1000);
-
-    return () => {
-      controller.abort();
-      clearInterval(interval);
-    };
+    const interval = setInterval(fetchSummary, 6 * 60 * 1000);
+    return () => clearInterval(interval);
   }, [fetchSummary]);
 
   // ================= DISPLAY HELPERS =================
@@ -145,13 +142,12 @@ function DashboardSummary() {
   const co2Display = () => formatNumber(social.co2Reduced, 1);
   const ktoeDisplay = () => formatNumber(social.ktoe, 5);
 
-  // ================= UI (ของเดิม) =================
+  // ================= UI =================
   return (
     <div className="flex px-[2%] mt-[3%]">
-      {/* ===== LEFT ===== */}
+      {/* LEFT */}
       <div className="w-[50%] bg-white mt-[2%] rounded-[20px] p-[2%]">
         <div className="grid grid-cols-3 gap-[2%]">
-          {/* PV */}
           <div className="text-center">
             <img src="/pv.png" className="w-10 mx-auto" />
             <div className="text-[#FFCC00] font-bold text-[30px]">
@@ -160,7 +156,6 @@ function DashboardSummary() {
             <p className="text-gray-400 text-sm">Generated energy of PV</p>
           </div>
 
-          {/* Load */}
           <div className="text-center">
             <img src="/Load.png" className="w-10 mx-auto" />
             <div className="text-[#06BABA] font-bold text-[30px]">
@@ -169,7 +164,6 @@ function DashboardSummary() {
             <p className="text-gray-400 text-sm">Consumption of Load</p>
           </div>
 
-          {/* Battery Charge */}
           <div className="text-center">
             <img src="/bat1.png" className="w-10 mx-auto" />
             <div className="text-[#06BA2D] font-bold text-[30px]">
@@ -178,7 +172,6 @@ function DashboardSummary() {
             <p className="text-gray-400 text-sm">Battery Charge</p>
           </div>
 
-          {/* Battery Discharge */}
           <div className="text-center">
             <img src="/bat2.png" className="w-10 mx-auto" />
             <div className="text-[#336600] font-bold text-[30px]">
@@ -187,7 +180,6 @@ function DashboardSummary() {
             <p className="text-gray-400 text-sm">Battery Discharge</p>
           </div>
 
-          {/* Grid Import */}
           <div className="text-center">
             <img src="/grid1.png" className="w-10 mx-auto" />
             <div className="text-[#BA6006] font-bold text-[30px]">
@@ -196,7 +188,6 @@ function DashboardSummary() {
             <p className="text-gray-400 text-sm">Import from grid</p>
           </div>
 
-          {/* Grid Export */}
           <div className="text-center">
             <img src="/grid2.png" className="w-10 mx-auto" />
             <div className="text-[#660033] font-bold text-[30px]">
@@ -207,7 +198,7 @@ function DashboardSummary() {
         </div>
       </div>
 
-      {/* ===== RIGHT ===== */}
+      {/* RIGHT */}
       <div className="w-[50%] bg-white mt-[2%] ml-[1%] rounded-[20px] p-[2%]">
         <h2 className="text-lg text-center">Output Freq (Hz)</h2>
         <div className="text-center text-[#c70039] font-bold text-[30px]">
