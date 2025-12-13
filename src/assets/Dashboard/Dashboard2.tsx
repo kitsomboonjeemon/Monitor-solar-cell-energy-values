@@ -37,15 +37,15 @@ function Dashboard2() {
 
   const fetchDataPV = async () => {
     try {
-      // ⭐ จุดสำคัญ: cast เป็น any
-      const res = (await api.get("/api/hps/history", {
+      // ✅ แก้ตรงนี้: ไม่ใส่ /api ซ้ำ
+      const res: any = await api.get("/hps/history", {
         params: {
           deviceSn,
           type: isStringType ? "string" : "central",
           startDate: rangePV[0].format("YYYY-MM-DD"),
           endDate: rangePV[1].format("YYYY-MM-DD"),
         },
-      })) as any;
+      });
 
       const data = Array.isArray(res?.data?.data) ? res.data.data : [];
 
