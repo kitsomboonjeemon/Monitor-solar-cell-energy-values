@@ -18,7 +18,6 @@ import {
 import api from "../../api/axios";
 
 const deviceSn = "YKD0F1022A";
-const isStringType = false;
 
 type PVPoint = {
   time: number;
@@ -37,11 +36,9 @@ function Dashboard2() {
 
   const fetchDataPV = async () => {
     try {
-      // ✅ endpoint ถูกแล้ว ไม่มี /api ซ้ำ
       const res: any = await api.get("/hps/history", {
         params: {
           deviceSn,
-          type: isStringType ? "string" : "central",
           startDate: rangePV[0].format("YYYY-MM-DD"),
           endDate: rangePV[1].format("YYYY-MM-DD"),
         },
@@ -51,28 +48,19 @@ function Dashboard2() {
 
       const transformed: PVPoint[] = data
         .map((item: any) => {
-          // ✅ FIX สำคัญ: รองรับชื่อเวลาได้หลายแบบ
-          const rawTime =
-            item.time ||
-            item.collectTime ||
-            item.createTime ||
-            item.timestamp ||
-            item.timeStamp;
+          // backend ส่ง time เป็น timestamp(ms) แล้ว
+          const t =
+            typeof item.time === "number"
+              ? item.time
+              : new Date(item.time).getTime();
 
-          const t = rawTime ? new Date(rawTime).getTime() : 0;
           if (!t) return null;
 
           return {
             time: t,
-            Power: Number(item.pvPower ?? item.ppv1 ?? item.ppv ?? 0),
-            Voltage: Number(item.pvVoltage ?? item.vpv ?? 0),
-            Current: Number(
-              item.pvCurrent ??
-                item.ipv ??
-                (Number(item.ipva || 0) +
-                  Number(item.ipvb || 0) +
-                  Number(item.ipvc || 0))
-            ),
+            Power: Number(item.pvPower ?? 0),
+            Voltage: Number(item.pvVoltage ?? 0),
+            Current: Number(item.pvCurrent ?? 0),
           };
         })
         .filter(Boolean)
