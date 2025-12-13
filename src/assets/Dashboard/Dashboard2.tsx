@@ -37,7 +37,7 @@ function Dashboard2() {
 
   const fetchDataPV = async () => {
     try {
-      // ✅ แก้ตรงนี้: ไม่ใส่ /api ซ้ำ
+      // ✅ endpoint ถูกแล้ว ไม่มี /api ซ้ำ
       const res: any = await api.get("/hps/history", {
         params: {
           deviceSn,
@@ -51,7 +51,15 @@ function Dashboard2() {
 
       const transformed: PVPoint[] = data
         .map((item: any) => {
-          const t = new Date(item.time).getTime();
+          // ✅ FIX สำคัญ: รองรับชื่อเวลาได้หลายแบบ
+          const rawTime =
+            item.time ||
+            item.collectTime ||
+            item.createTime ||
+            item.timestamp ||
+            item.timeStamp;
+
+          const t = rawTime ? new Date(rawTime).getTime() : 0;
           if (!t) return null;
 
           return {
