@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 
-// ================= TYPES =================
+// ----- Types -----
 type Summary = {
   pvEnergy: number;
   loadEnergy: number;
@@ -16,26 +16,15 @@ type Social = {
   ktoe: number;
 };
 
-// ✅ API response type (สำคัญมาก)
-type SummaryApiResponse = {
-  pvEnergy?: number;
-  loadEnergy?: number;
-  batCharge?: number;
-  batDischarge?: number;
-  gridImport?: number;
-  gridExport?: number;
-  outputFreq?: number;
-  irradiance?: number;
-  backplaneTemp?: number;
-};
-
-// ================= AXIOS =================
+// ----- axios instance -----
+// Use VITE_API_URL (recommended) or fallback to root "/"
+const apiBase = (import.meta.env as any).VITE_API_URL || "/";
 const api = axios.create({
-  baseURL: (import.meta.env as any).VITE_API_URL || "/api",
+  baseURL: apiBase,
   timeout: 15000,
 });
 
-// ================= HELPERS =================
+// ----- helpers -----
 const toNumber = (v: any, fallback = 0): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
@@ -46,11 +35,12 @@ const formatNumber = (
   digits = 1,
   fallback = "--"
 ): string => {
-  if (v === null || v === undefined || !Number.isFinite(v)) return fallback;
+  if (v === null || v === undefined || Number.isNaN(v)) return fallback;
+  if (!Number.isFinite(v)) return fallback;
   return v.toFixed(digits);
 };
 
-// ================= COMPONENT =================
+// ----- Component -----
 function DashboardSummary() {
   const [summary, setSummary] = useState<Summary>({
     pvEnergy: 0,
@@ -62,71 +52,172 @@ function DashboardSummary() {
   });
 
   const [outputFreq, setOutputFreq] = useState<number | null>(null);
-  const [irradiance, setIrradiance] = useState<number | null>(null);
-  const [backplaneTemp, setBackplaneTemp] = useState<number | null>(null);
   const [social, setSocial] = useState<Social>({ co2Reduced: 0, ktoe: 0 });
 
-  const [, setLoading] = useState(true);
+  const [irradiance, setIrradiance] = useState<number | null>(null);
+  const [backplaneTemp, setBackplaneTemp] = useState<number | null>(null);
+
+  const [, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ================= FETCH SUMMARY =================
-  const fetchSummary = useCallback(async () => {
-    try {
+  const fetchSummary = useCallback(
+    async (signal?: AbortSignal) => {
       setLoading(true);
       setError(null);
+      try {
+        // build url using env base if provided (supports absolute base), otherwise relative
+        const envBase = (import.meta.env as any).VITE_API_URL ?? "";
+        const base = String(envBase).replace(/\/$/, "");
+        const path = "/api/summary";
+        const url = base ? `${base}${path}` : path;
 
-      const res = await api.get("/summary");
-      const payload: SummaryApiResponse = res.data ?? {};
+        // cast to any so TS won't complain about res.data?.data
+        const res: any = await api.get(url, { signal } as any);
 
-      const pv = toNumber(payload.pvEnergy);
-      const load = toNumber(payload.loadEnergy);
-      const batCharge = toNumber(payload.batCharge);
-      const batDischarge = toNumber(payload.batDischarge);
-      const gridImport = toNumber(payload.gridImport);
-      const gridExport = toNumber(payload.gridExport);
+        // backend might return { data: {...} } or {...}
+        const payload = res.data?.data ?? res.data ?? {};
 
-      setSummary({
-        pvEnergy: pv,
-        loadEnergy: load,
-        batCharge,
-        batDischarge,
-        gridImport,
-        gridExport,
-      });
+        // try multiple field names (some backends use different keys)
+        const pv =
+          toNumber(
+            payload.pvEnergy ??
+              payload.pv_energy ??
+              payload.pv_today ??
+              payload.ePV ??
+              payload.e_today ??
+              payload.electricity ??
+              0,
+            0
+          ) || 0;
 
-      setOutputFreq(
-        payload.outputFreq != null ? toNumber(payload.outputFreq) : null
-      );
-      setIrradiance(
-        payload.irradiance != null ? toNumber(payload.irradiance) : null
-      );
-      setBackplaneTemp(
-        payload.backplaneTemp != null
-          ? toNumber(payload.backplaneTemp)
-          : null
-      );
+        const load =
+          toNumber(
+            payload.loadEnergy ??
+              payload.load_energy ??
+              payload.load_today ??
+              payload.load ??
+              0,
+            0
+          ) || 0;
 
-      setSocial({
-        co2Reduced: pv * 0.9,
-        ktoe: pv / 11630,
-      });
-    } catch (err) {
-      console.error("❌ fetch summary error:", err);
-      setError("ไม่สามารถดึงข้อมูลได้");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        const batCharge =
+          toNumber(
+            payload.batCharge ??
+              payload.bat_charge ??
+              payload.batteryCharge ??
+              payload.battery_charge ??
+              payload.chargeEnergy ??
+              0,
+            0
+          ) || 0;
 
-  // ================= AUTO REFRESH =================
+        const batDischarge =
+          toNumber(
+            payload.batDischarge ??
+              payload.bat_discharge ??
+              payload.batteryDischarge ??
+              payload.battery_discharge ??
+              payload.dischargeEnergy ??
+              0,
+            0
+          ) || 0;
+
+        // grid import/export may be named differently (egridToday / etoGridToday etc.)
+        const gridImport =
+          toNumber(
+            payload.gridImport ??
+              payload.grid_import ??
+              payload.egridToday ??
+              payload.importFromGrid ??
+              payload.import ??
+              0,
+            0
+          ) || 0;
+
+        const gridExport =
+          toNumber(
+            payload.gridExport ??
+              payload.grid_export ??
+              payload.etoGridToday ??
+              payload.exportToGrid ??
+              payload.export ??
+              0,
+            0
+          ) || 0;
+
+        // other fields
+        const outputFreqVal =
+          payload.outputFreq ?? payload.output_freq ?? payload.freq ?? null;
+        const irradianceVal =
+          payload.irradiance ??
+          payload.irradiance_wm2 ??
+          payload.pvRadiation ??
+          null;
+        const backTemp =
+          payload.backplaneTemp ?? payload.backplane_temp ?? payload.temp ?? null;
+
+        // social calculations (example)
+        const co2ReducedKg = pv * 0.9;
+        const ktoe = pv / 11630;
+
+        setSummary({
+          pvEnergy: pv,
+          loadEnergy: load,
+          batCharge,
+          batDischarge,
+          gridImport,
+          gridExport,
+        });
+
+        setOutputFreq(
+          outputFreqVal !== undefined && outputFreqVal !== null
+            ? toNumber(outputFreqVal, 0)
+            : null
+        );
+        setSocial({ co2Reduced: co2ReducedKg, ktoe });
+        setIrradiance(
+          irradianceVal !== undefined && irradianceVal !== null
+            ? toNumber(irradianceVal, 0)
+            : null
+        );
+        setBackplaneTemp(
+          backTemp !== undefined && backTemp !== null
+            ? toNumber(backTemp, 0)
+            : null
+        );
+
+        setLoading(false);
+      } catch (err: any) {
+        if (err?.name === "CanceledError" || err?.name === "AbortError") {
+          // aborted -> ignore
+          return;
+        }
+        console.error("❌ Failed to fetch summary:", err);
+        setError("ไม่สามารถดึงข้อมูลได้");
+        setLoading(false);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
-    fetchSummary();
+    const controller = new AbortController();
 
-    const interval = setInterval(fetchSummary, 6 * 60 * 1000);
-    return () => clearInterval(interval);
+    // initial fetch
+    fetchSummary(controller.signal);
+
+    // interval fetch every 6 minutes
+    const interval = setInterval(() => {
+      fetchSummary(controller.signal);
+    }, 6 * 60 * 1000);
+
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [fetchSummary]);
 
-  // ================= DISPLAY HELPERS =================
+  // rendering helpers
   const pvDisplay = () => formatNumber(summary.pvEnergy, 1);
   const loadDisplay = () => formatNumber(summary.loadEnergy, 1);
   const batChargeDisplay = () => formatNumber(summary.batCharge, 1);
@@ -142,94 +233,205 @@ function DashboardSummary() {
   const co2Display = () => formatNumber(social.co2Reduced, 1);
   const ktoeDisplay = () => formatNumber(social.ktoe, 5);
 
-  // ================= UI =================
   return (
     <div className="flex px-[2%] mt-[3%]">
-      {/* LEFT */}
-      <div className="w-[50%] bg-white mt-[2%] rounded-[20px] p-[2%]">
-        <div className="grid grid-cols-3 gap-[2%]">
-          <div className="text-center">
-            <img src="/pv.png" className="w-10 mx-auto" />
-            <div className="text-[#FFCC00] font-bold text-[30px]">
-              {pvDisplay()} <span className="text-[18px]">kWh</span>
+      <div className="w-[50%] h-full bg-[#ffffff] mt-[2%] rounded-[20px] p-[2%] ">
+        <div className="grid grid-cols-3 gap-[2%] justify-center items-center">
+          <div className="text-center flex flex-col items-center leading-none">
+            <div className="flex items-center justify-center">
+              <img
+                src="/pv.png"
+                className="w-[40px] h-[40px] mb-[5px] rounded-full"
+                alt="pv"
+              />
+              <h2 className="text-right ml-[2%]">PV</h2>
             </div>
-            <p className="text-gray-400 text-sm">Generated energy of PV</p>
+            <div className="text-[#FFCC00] font-bold text-[30px] leading-none">
+              <span>{pvDisplay()}</span>
+              <span className="text-[18px] font-light"> kWh</span>
+            </div>
+            <p className="text-[#b7b7b7] text-sm leading-none">
+              Generated energy of PV
+            </p>
           </div>
 
           <div className="text-center">
-            <img src="/Load.png" className="w-10 mx-auto" />
-            <div className="text-[#06BABA] font-bold text-[30px]">
-              {loadDisplay()} <span className="text-[18px]">kWh</span>
+            <div className="flex items-center justify-center">
+              <img
+                src="/Load.png"
+                className="w-[40px] h-[40px] mb-[5px] rounded-full"
+                alt="load"
+              />
+              <h2 className="text-gray-500 ml-[2%]">Load</h2>
             </div>
-            <p className="text-gray-400 text-sm">Consumption of Load</p>
+            <div className="flex items-baseline justify-center">
+              <span className="text-[#06BABA] font-bold text-[30px] leading-none">
+                {loadDisplay()}
+              </span>
+              <span className="text-[18px] text-[#06BABA] font-light ml-1">
+                kWh
+              </span>
+            </div>
+            <p className="text-[#b7b7b7] text-sm">Consumption of Load</p>
           </div>
 
           <div className="text-center">
-            <img src="/bat1.png" className="w-10 mx-auto" />
-            <div className="text-[#06BA2D] font-bold text-[30px]">
-              {batChargeDisplay()} <span className="text-[18px]">kWh</span>
+            <div className="flex items-center justify-center">
+              <img
+                src="/bat1.png"
+                className="w-[40px] h-[40px] mb-[5px] rounded-full"
+                alt="bat"
+              />
+              <h2 className="text-gray-500 mb-1 ml-[2%]">BAT</h2>
             </div>
-            <p className="text-gray-400 text-sm">Battery Charge</p>
+            <div className="flex items-baseline justify-center">
+              <span className="text-[#06BA2D] font-bold text-[30px] leading-none">
+                {batChargeDisplay()}
+              </span>
+              <span className="text-[#06BA2D] text-sm ml-1"> kWh </span>
+            </div>
+            <p className="text-[#b7b7b7] text-sm">Battery charge</p>
           </div>
 
           <div className="text-center">
-            <img src="/bat2.png" className="w-10 mx-auto" />
-            <div className="text-[#336600] font-bold text-[30px]">
-              {batDischargeDisplay()} <span className="text-[18px]">kWh</span>
+            <div className="flex items-center justify-center">
+              <img
+                src="/bat2.png"
+                className="w-[40px] h-[40px] mb-[5px] rounded-full"
+                alt="bat"
+              />
+              <h2 className="text-gray-500 mb-1 ml-[2%]">BAT</h2>
             </div>
-            <p className="text-gray-400 text-sm">Battery Discharge</p>
+            <div className="flex items-baseline justify-center">
+              <span className="text-[#336600] font-bold text-[30px] leading-none">
+                {batDischargeDisplay()}
+              </span>
+              <span className="text-[#336600] text-sm ml-1"> kWh</span>
+            </div>
+            <p className="text-[#b7b7b7] text-sm">Battery Discharge</p>
           </div>
 
           <div className="text-center">
-            <img src="/grid1.png" className="w-10 mx-auto" />
-            <div className="text-[#BA6006] font-bold text-[30px]">
-              {gridImportDisplay()} <span className="text-[18px]">kWh</span>
+            <div className="flex items-center justify-center">
+              <img
+                src="/grid1.png"
+                className="w-[40px] h-[40px] mb-[5px] rounded-full"
+                alt="grid"
+              />
+              <h2 className="text-gray-500 mb-1 ml-[2%]">Grid</h2>
             </div>
-            <p className="text-gray-400 text-sm">Import from grid</p>
+            <div className="flex items-baseline justify-center">
+              <span className="text-[#BA6006] font-bold text-[30px] leading-none">
+                {gridImportDisplay()}
+              </span>
+              <span className="text-[#BA6006] text-sm ml-1"> kWh</span>
+            </div>
+            <p className="text-[#b7b7b7] text-sm">Import from grid</p>
           </div>
 
           <div className="text-center">
-            <img src="/grid2.png" className="w-10 mx-auto" />
-            <div className="text-[#660033] font-bold text-[30px]">
-              {gridExportDisplay()} <span className="text-[18px]">kWh</span>
+            <div className="flex items-center justify-center">
+              <img
+                src="/grid2.png"
+                className="w-[40px] h-[40px] mb-[5px] rounded-full"
+                alt="grid"
+              />
+              <h2 className="text-gray-500 mb-1 ml-[2%]">Grid</h2>
             </div>
-            <p className="text-gray-400 text-sm">Export to grid</p>
+            <div className="flex items-baseline justify-center">
+              <span className="text-[#660033] font-bold text-[30px] leading-none">
+                {gridExportDisplay()}
+              </span>
+              <span className="text-[#660033] text-sm ml-1"> kWh</span>
+            </div>
+            <p className="text-[#b7b7b7] text-sm">Export to grid</p>
           </div>
         </div>
       </div>
 
-      {/* RIGHT */}
-      <div className="w-[50%] bg-white mt-[2%] ml-[1%] rounded-[20px] p-[2%]">
-        <h2 className="text-lg text-center">Output Freq (Hz)</h2>
-        <div className="text-center text-[#c70039] font-bold text-[30px]">
-          {outputFreqDisplay()} Hz
-        </div>
-
-        <div className="mt-6 grid grid-cols-2 text-center">
-          <div>
-            <div className="text-[#FFCC00] font-bold text-[30px]">
-              {irradianceDisplay()} W/㎡
+      <div className="w-[50%] h-full bg-[#ffffff] mt-[2%] ml-[1%] justify-start rounded-[20px] p-[2%]">
+        <div className="grid grid-cols-2 gap-[2%]">
+          <div className="text-center">
+            <h2 className="text-[#000000] text-[18px]">Output Freq (Hz)</h2>
+            <div className="flex items-baseline justify-center">
+              <span className="text-[#c70039] font-bold text-[30px] leading-none">
+                {outputFreqDisplay()}
+              </span>
+              <span className="text-[#c70039] text-[18px] ml-2">Hz</span>
             </div>
-            <p className="text-gray-400">PV radiation</p>
-          </div>
-          <div>
-            <div className="text-[#FFCC00] font-bold text-[30px]">
-              {backTempDisplay()} °C
+            <p className="text-[#000000] text-[16px]">ความถี่ (Hz)</p>
+
+            <div className="mt-[5%]">
+              <h2 className="text-[#000000] text-[24px]">Shine master</h2>
+              <div className="flex gap-[10%] justify-center">
+                <div className="text-center">
+                  <div className="flex items-baseline justify-center">
+                    <span className="text-[#FFCC00] font-bold text-[30px] leading-none">
+                      {irradianceDisplay()}
+                    </span>
+                    <span className="text-[#FFCC00] text-[18px] ml-1">
+                      {" "}
+                      W/㎡
+                    </span>
+                  </div>
+                  <p className="text-[#b7b7b7] text-[16px]">PV radiation</p>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-baseline justify-center">
+                    <span className="text-[#FFCC00] font-bold text-[30px] leading-none">
+                      {backTempDisplay()}
+                    </span>
+                    <span className="text-[#FFCC00] text-[18px] ml-1">
+                      {" "}
+                      °C
+                    </span>
+                  </div>
+                  <p className="text-[#b7b7b7] text-[16px]">Backplane temp</p>
+                </div>
+              </div>
             </div>
-            <p className="text-gray-400">Backplane temp</p>
           </div>
-        </div>
 
-        <div className="mt-6">
-          <h2 className="text-xl mb-2">Social Contribution</h2>
-          <p className="text-[#146c94] font-bold text-[26px]">
-            {co2Display()} kgCO₂
-          </p>
-          <p className="text-[#146494] font-bold text-[26px]">
-            {ktoeDisplay()} ktoe
-          </p>
+          <div>
+            <h2 className="text-[#000000] text-[24px]">Social Contribution</h2>
+            <div>
+              <div className="flex items-center mb-[10px]">
+                <img
+                  src="/Co.png"
+                  alt="co2"
+                  className="w-[60px] h-[60px] rounded-full"
+                />
+                <div className="ml-[2%]">
+                  <span className="text-[#146c94] font-bold text-[30px] leading-none">
+                    {co2Display()}
+                    <span className="text-[#146c94] text-[18px]"> kgCO₂</span>
+                  </span>
+                  <p>Co₂ Reduced</p>
+                </div>
+              </div>
 
-          {error && <p className="text-red-500 mt-2">{error}</p>}
+              <div className="flex items-center">
+                <img
+                  src="/oil1.png"
+                  alt="oil"
+                  className="w-[60px] h-[60px] rounded-full"
+                />
+                <div className="ml-[2%]">
+                  <span className="text-[#146494] font-bold text-[30px] leading-none">
+                    {ktoeDisplay()}
+                    <span className="text-[#146494] text-[18px]"> ktoe</span>
+                  </span>
+                  <p>Tonne of oil equivalent</p>
+                </div>
+              </div>
+
+              {error && (
+                <p className="text-red-500 mt-2 text-sm">
+                  เกิดข้อผิดพลาด: {error}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
