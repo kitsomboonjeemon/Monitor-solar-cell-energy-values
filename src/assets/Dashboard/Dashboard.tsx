@@ -56,55 +56,62 @@ function DashboardSummary() {
   const [backplaneTemp, setBackplaneTemp] = useState<number | null>(null);
   const [social, setSocial] = useState<Social>({ co2Reduced: 0, ktoe: 0 });
 
-  const [loading, setLoading] = useState<boolean>(true);
+  const [, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   // ================= FETCH SUMMARY =================
-  const fetchSummary = useCallback(async (signal?: AbortSignal) => {
-    try {
-      setLoading(true);
-      setError(null);
+ const fetchSummary = useCallback(async (signal?: AbortSignal) => {
+  try {
+    setLoading(true);
+    setError(null);
 
-      // ✅ ไม่ซ้ำแล้ว
-      const res = await api.get("/summary", { signal });
-      const payload = res.data ?? {};
+    const res = await api.get("/summary", { signal });
 
-      const pv = toNumber(payload.pvEnergy);
-      const load = toNumber(payload.loadEnergy);
-      const batCharge = toNumber(payload.batCharge);
-      const batDischarge = toNumber(payload.batDischarge);
-      const gridImport = toNumber(payload.gridImport);
-      const gridExport = toNumber(payload.gridExport);
+    const payload: SummaryApiResponse = res.data ?? {};
 
-      setSummary({
-        pvEnergy: pv,
-        loadEnergy: load,
-        batCharge,
-        batDischarge,
-        gridImport,
-        gridExport,
-      });
+    const pv = toNumber(payload.pvEnergy);
+    const load = toNumber(payload.loadEnergy);
+    const batCharge = toNumber(payload.batCharge);
+    const batDischarge = toNumber(payload.batDischarge);
+    const gridImport = toNumber(payload.gridImport);
+    const gridExport = toNumber(payload.gridExport);
 
-      setOutputFreq(payload.outputFreq != null ? toNumber(payload.outputFreq) : null);
-      setIrradiance(payload.irradiance != null ? toNumber(payload.irradiance) : null);
-      setBackplaneTemp(
-        payload.backplaneTemp != null
-          ? toNumber(payload.backplaneTemp)
-          : null
-      );
+    setSummary({
+      pvEnergy: pv,
+      loadEnergy: load,
+      batCharge,
+      batDischarge,
+      gridImport,
+      gridExport,
+    });
 
-      setSocial({
-        co2Reduced: pv * 0.9,
-        ktoe: pv / 11630,
-      });
-    } catch (err: any) {
-      if (err?.name === "CanceledError" || err?.name === "AbortError") return;
-      console.error("❌ fetch summary error:", err);
-      setError("ไม่สามารถดึงข้อมูลได้");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    setOutputFreq(
+      payload.outputFreq != null ? toNumber(payload.outputFreq) : null
+    );
+
+    setIrradiance(
+      payload.irradiance != null ? toNumber(payload.irradiance) : null
+    );
+
+    setBackplaneTemp(
+      payload.backplaneTemp != null
+        ? toNumber(payload.backplaneTemp)
+        : null
+    );
+
+    setSocial({
+      co2Reduced: pv * 0.9,
+      ktoe: pv / 11630,
+    });
+  } catch (err: any) {
+    if (err?.name === "CanceledError" || err?.name === "AbortError") return;
+    console.error("❌ fetch summary error:", err);
+    setError("ไม่สามารถดึงข้อมูลได้");
+  } finally {
+    setLoading(false);
+  }
+}, []);
+
 
   // ================= AUTO REFRESH =================
   useEffect(() => {
