@@ -34,33 +34,36 @@ function Dashboard2() {
   ]);
 
   const fetchDataPV = useCallback(async () => {
-    try {
-      const res = await api.get("/hps/history", {
-        params: {
-          deviceSn,
-          startDate: rangePV[0].format("YYYY-MM-DD"),
-          endDate: rangePV[1].format("YYYY-MM-DD"),
-        },
-      });
+  try {
+    const res = await api.get<HistoryApiResponse>("/hps/history", {
+      params: {
+        deviceSn,
+        startDate: rangePV[0].format("YYYY-MM-DD"),
+        endDate: rangePV[1].format("YYYY-MM-DD"),
+      },
+    });
 
-      const data = Array.isArray(res?.data?.data) ? res.data.data : [];
+    const data: PVPoint[] = Array.isArray(res.data?.data)
+      ? res.data.data
+      : [];
 
-      const transformed: PVPoint[] = data
-        .map((item: any) => ({
-          time: Number(item.time),
-          pvPower: Number(item.pvPower || 0),
-          pvVoltage: Number(item.pvVoltage || 0),
-          pvCurrent: Number(item.pvCurrent || 0),
-        }))
-        .filter((d) => d.time)
-        .sort((a, b) => a.time - b.time);
+    const transformed: PVPoint[] = data
+      .map((item: PVPoint): PVPoint => ({
+        time: Number(item.time),
+        pvPower: Number(item.pvPower ?? 0),
+        pvVoltage: Number(item.pvVoltage ?? 0),
+        pvCurrent: Number(item.pvCurrent ?? 0),
+      }))
+      .filter((d: PVPoint) => Boolean(d.time))
+      .sort((a: PVPoint, b: PVPoint) => a.time - b.time);
 
-      setHistoryPV(transformed);
-    } catch (err) {
-      console.error("❌ Error fetching PV data:", err);
-      setHistoryPV([]);
-    }
-  }, [rangePV]);
+    setHistoryPV(transformed);
+  } catch (err) {
+    console.error("❌ Error fetching PV data:", err);
+    setHistoryPV([]);
+  }
+}, [rangePV]);
+
 
   // โหลด + รีเฟรชทุก 6 นาที
   useEffect(() => {
