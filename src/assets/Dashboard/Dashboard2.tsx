@@ -25,6 +25,10 @@ type PVPoint = {
   pvVoltage: number;
   pvCurrent: number;
 };
+type HistoryApiResponse = {
+  data: PVPoint[];
+};
+
 
 function Dashboard2() {
   const [historyPV, setHistoryPV] = useState<PVPoint[]>([]);
