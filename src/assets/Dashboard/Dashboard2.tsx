@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { DatePicker, Space } from "antd";
 import dayjs, { Dayjs } from "dayjs";
 import "dayjs/locale/th";
@@ -21,22 +21,21 @@ const deviceSn = "YKD0F1022A";
 
 type PVPoint = {
   time: number;
-  Power: number;
-  Voltage: number;
-  Current: number;
+  pvPower: number;
+  pvVoltage: number;
+  pvCurrent: number;
 };
 
 function Dashboard2() {
   const [historyPV, setHistoryPV] = useState<PVPoint[]>([]);
-
   const [rangePV, setRangePV] = useState<[Dayjs, Dayjs]>([
     dayjs().startOf("day"),
     dayjs().endOf("day"),
   ]);
 
-  const fetchDataPV = async () => {
+  const fetchDataPV = useCallback(async () => {
     try {
-      const res: any = await api.get("/hps/history", {
+      const res = await api.get("/hps/history", {
         params: {
           deviceSn,
           startDate: rangePV[0].format("YYYY-MM-DD"),
@@ -47,42 +46,32 @@ function Dashboard2() {
       const data = Array.isArray(res?.data?.data) ? res.data.data : [];
 
       const transformed: PVPoint[] = data
-        .map((item: any) => {
-          // backend ส่ง time เป็น timestamp(ms) แล้ว
-          const t =
-            typeof item.time === "number"
-              ? item.time
-              : new Date(item.time).getTime();
-
-          if (!t) return null;
-
-          return {
-            time: t,
-            Power: Number(item.pvPower ?? 0),
-            Voltage: Number(item.pvVoltage ?? 0),
-            Current: Number(item.pvCurrent ?? 0),
-          };
-        })
-        .filter(Boolean)
-        .sort((a: any, b: any) => a.time - b.time);
+        .map((item: any) => ({
+          time: Number(item.time),
+          pvPower: Number(item.pvPower || 0),
+          pvVoltage: Number(item.pvVoltage || 0),
+          pvCurrent: Number(item.pvCurrent || 0),
+        }))
+        .filter((d) => d.time)
+        .sort((a, b) => a.time - b.time);
 
       setHistoryPV(transformed);
     } catch (err) {
       console.error("❌ Error fetching PV data:", err);
       setHistoryPV([]);
     }
-  };
+  }, [rangePV]);
 
-  // 🔄 โหลด + รีเฟรชทุก 6 นาที
+  // โหลด + รีเฟรชทุก 6 นาที
   useEffect(() => {
     fetchDataPV();
     const interval = setInterval(fetchDataPV, 6 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [rangePV]);
+  }, [fetchDataPV]);
 
   return (
-    <div className="flex justify-center items-center w-full mt-[2%] mb-[2%]">
-      <div className="bg-white p-[2%] rounded-[20px] shadow w-[90%]">
+    <div className="flex justify-center w-full my-6">
+      <div className="bg-white p-6 rounded-2xl shadow w-[90%]">
         <div className="flex justify-between items-center mb-4">
           <h2 className="font-bold text-lg">🌞 PV Historical Graph</h2>
 
@@ -91,9 +80,7 @@ function Dashboard2() {
               value={rangePV}
               format="YYYY-MM-DD"
               allowClear={false}
-              onChange={(val) => {
-                if (val) setRangePV(val as [Dayjs, Dayjs]);
-              }}
+              onChange={(val) => val && setRangePV(val as [Dayjs, Dayjs])}
             />
           </Space>
         </div>
@@ -103,7 +90,7 @@ function Dashboard2() {
             ไม่มีข้อมูล PV ในช่วงวันที่เลือก
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={420}>
             <LineChart data={historyPV}>
               <CartesianGrid strokeDasharray="3 3" />
 
@@ -112,15 +99,9 @@ function Dashboard2() {
                 type="number"
                 scale="time"
                 domain={["dataMin", "dataMax"]}
-                tickFormatter={(v) => dayjs(v).format("HH:mm")}
-              />
-              <XAxis
-                dataKey="time"
-                type="number"
-                scale="time"
-                orientation="bottom"
-                domain={["dataMin", "dataMax"]}
-                tickFormatter={(v) => dayjs(v).format("D MMM YYYY")}
+                tickFormatter={(v) =>
+                  dayjs(v).format("DD/MM HH:mm")
+                }
               />
 
               <YAxis />
@@ -133,21 +114,21 @@ function Dashboard2() {
 
               <Line
                 type="monotone"
-                dataKey="Power"
+                dataKey="pvPower"
                 name="PV Power (kW)"
                 stroke="#B4BA06"
                 dot={false}
               />
               <Line
                 type="monotone"
-                dataKey="Voltage"
+                dataKey="pvVoltage"
                 name="Voltage (V)"
                 stroke="#06BABA"
                 dot={false}
               />
               <Line
                 type="monotone"
-                dataKey="Current"
+                dataKey="pvCurrent"
                 name="Current (A)"
                 stroke="#BA6006"
                 dot={false}
