@@ -101,6 +101,7 @@ function Dashboard2() {
       <div className="bg-white p-[2%] rounded-[20px] shadow w-[90%]">
         <div className="flex justify-between items-center mb-4">
           <h2 className="font-bold text-lg">🌞 PV Historical Graph</h2>
+          <div className="hover:ring hover:ring-[#c70039] rounded-[10px]">
           <Space>
             <DatePicker.RangePicker
               value={rangePV}
@@ -108,6 +109,7 @@ function Dashboard2() {
               format="YYYY-MM-DD"
             />
           </Space>
+          </div>
         </div>
 
         {historyPV.length === 0 ? (
