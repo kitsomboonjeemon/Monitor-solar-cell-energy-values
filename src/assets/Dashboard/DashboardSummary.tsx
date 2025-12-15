@@ -4,6 +4,20 @@ import axios from "axios";
 // ✅ API base จาก env
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
+/* ================= TYPES ================= */
+
+type SummaryResponse = {
+  pvEnergy?: number;
+  loadEnergy?: number;
+  batCharge?: number;
+  batDischarge?: number;
+  gridImport?: number;
+  gridExport?: number;
+  outputFreq?: number;
+  irradiance?: number;
+  backplaneTemp?: number;
+};
+
 type Summary = {
   pvEnergy: number;
   loadEnergy: number;
@@ -17,6 +31,8 @@ type Social = {
   co2Reduced: number;
   ktoe: number;
 };
+
+/* ================= COMPONENT ================= */
 
 function DashboardSummary() {
   const [summary, setSummary] = useState<Summary>({
@@ -36,8 +52,12 @@ function DashboardSummary() {
   useEffect(() => {
     const fetchSummary = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/api/summary`);
-        const data = res.data || {};
+        // ✅ ใส่ type ให้ axios
+        const res = await axios.get<SummaryResponse>(
+          `${API_BASE}/api/summary`
+        );
+
+        const data = res.data;
 
         const pvEnergy = Number(data.pvEnergy ?? 0);
 
@@ -58,7 +78,7 @@ function DashboardSummary() {
 
         // 🌱 Social contribution
         setSocial({
-          co2Reduced: pvEnergy * 0.9, // kgCO₂
+          co2Reduced: pvEnergy * 0.9,
           ktoe: pvEnergy / 11630,
         });
 
