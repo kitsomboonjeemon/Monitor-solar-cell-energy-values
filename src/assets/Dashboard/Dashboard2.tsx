@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { DatePicker, Space } from "antd";
-import dayjs from "dayjs";
+import type { RangePickerProps } from "antd/es/date-picker";
+import dayjs, { Dayjs } from "dayjs";
 import "dayjs/locale/th";
 dayjs.locale("th");
 
@@ -29,32 +30,46 @@ type PVHistory = {
   Current: number;
 };
 
+// ✅ response type จาก backend
+type HistoryApiResponse = {
+  data?: {
+    time: string;
+    pvPower?: number;
+    pvVoltage?: number;
+    pvCurrent?: number;
+  }[];
+};
+
 function Dashboard2() {
   const [historyPV, setHistoryPV] = useState<PVHistory[]>([]);
-  const [rangePV, setRangePV] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
+  const [rangePV, setRangePV] = useState<[Dayjs, Dayjs]>([
     dayjs().startOf("day"),
     dayjs().endOf("day"),
   ]);
 
   const fetchDataPV = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/api/hps/history`, {
-        params: {
-          deviceSn,
-          type: isStringType ? "string" : "central",
-          startDate: rangePV[0].format("YYYY-MM-DD 00:00:00"),
-          endDate: rangePV[1].format("YYYY-MM-DD 23:59:59"),
-        },
-      });
+      const res = await axios.get<HistoryApiResponse>(
+        `${API_BASE}/api/hps/history`,
+        {
+          params: {
+            deviceSn,
+            type: isStringType ? "string" : "central",
+            startDate: rangePV[0].format("YYYY-MM-DD 00:00:00"),
+            endDate: rangePV[1].format("YYYY-MM-DD 23:59:59"),
+          },
+        }
+      );
 
       const rawData = res.data?.data ?? [];
 
       const transformed: PVHistory[] = rawData
+        .slice()
         .sort(
-          (a: any, b: any) =>
+          (a, b) =>
             new Date(a.time).getTime() - new Date(b.time).getTime()
         )
-        .map((item: any) => ({
+        .map((item) => ({
           time: new Date(item.time).getTime(),
           Power: Number(item.pvPower ?? 0),
           Voltage: Number(item.pvVoltage ?? 0),
@@ -74,6 +89,13 @@ function Dashboard2() {
     return () => clearInterval(interval);
   }, [rangePV]);
 
+  // ✅ แก้ RangePicker type ให้ TS ไม่ error
+  const onRangeChange: RangePickerProps["onChange"] = (val) => {
+    if (val && val[0] && val[1]) {
+      setRangePV([val[0], val[1]]);
+    }
+  };
+
   return (
     <div className="flex justify-center items-center w-full mt-[2%] mb-[2%]">
       <div className="bg-white p-[2%] rounded-[20px] shadow w-[90%]">
@@ -82,7 +104,7 @@ function Dashboard2() {
           <Space>
             <DatePicker.RangePicker
               value={rangePV}
-              onChange={(val) => val && setRangePV(val)}
+              onChange={onRangeChange}
               format="YYYY-MM-DD"
             />
           </Space>
