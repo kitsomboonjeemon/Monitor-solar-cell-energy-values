@@ -98,7 +98,7 @@ function Dashboard2() {
 
   return (
     <div className="flex justify-center items-center w-full mt-[2%] mb-[2%]">
-      <div className="bg-white p-[2%] rounded-[20px] shadow w-[90%]">
+      <div className="bg-[#ffffff] p-[2%] rounded-[20px] shadow w-[90%]">
         <div className="flex justify-between items-center mb-4">
           <h2 className="font-bold text-lg">🌞 PV Historical Graph</h2>
           <div className="hover:ring hover:ring-[#c70039] rounded-[10px]">
