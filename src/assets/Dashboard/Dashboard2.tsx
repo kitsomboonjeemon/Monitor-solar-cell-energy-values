@@ -26,6 +26,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL;
 type PVHistory = {
   time: number;
   Power: number;
+  Load: number;     // 👈 เพิ่ม Load
   Voltage: number;
   Current: number;
 };
@@ -35,6 +36,7 @@ type HistoryApiResponse = {
   data?: {
     time: string;
     pvPower?: number;
+    loadPower?: number;   // 👈 รับ Load (kW)
     pvVoltage?: number;
     pvCurrent?: number;
   }[];
@@ -72,6 +74,7 @@ function Dashboard2() {
         .map((item) => ({
           time: new Date(item.time).getTime(),
           Power: Number(item.pvPower ?? 0),
+          Load: Number(item.loadPower ?? 0),   // 👈 Load
           Voltage: Number(item.pvVoltage ?? 0),
           Current: Number(item.pvCurrent ?? 0),
         }));
@@ -100,8 +103,8 @@ function Dashboard2() {
     <div className="flex justify-center items-center w-full mt-[2%] mb-[2%]">
       <div className="bg-[#ffffff] p-[2%] rounded-[20px] shadow w-[90%]">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="font-bold text-lg">🌞 PV Historical Graph</h2>
-          
+          <h2 className="font-bold text-lg">📈 Historical Graph</h2>
+
           <Space>
             <DatePicker.RangePicker
               value={rangePV}
@@ -109,49 +112,116 @@ function Dashboard2() {
               format="YYYY-MM-DD"
             />
           </Space>
-         
         </div>
 
         {historyPV.length === 0 ? (
           <div className="text-center text-gray-400">ไม่มีข้อมูล</div>
         ) : (
-          <ResponsiveContainer width="100%" height={400}>
-            <LineChart data={historyPV}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="time"
-                type="number"
-                scale="time"
-                domain={["auto", "auto"]}
-                tickFormatter={(v) => dayjs(v).format("HH:mm")}
-              />
-              <YAxis />
-              <Tooltip
-                labelFormatter={(v) =>
-                  dayjs(v).format("YYYY-MM-DD HH:mm:ss")
-                }
-              />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="Power"
-                stroke="#B4BA06"
-                name="PV Power (kW)"
-              />
-              <Line
-                type="monotone"
-                dataKey="Voltage"
-                stroke="#06BABA"
-                name="Voltage (V)"
-              />
-              <Line
-                type="monotone"
-                dataKey="Current"
-                stroke="#BA6006"
-                name="Current (A)"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          <div className="grid grid-cols-1 gap-6">
+
+            {/* ===== กราฟที่ 1 : PV Power ===== */}
+            <div>
+              <h3 className="text-center font-semibold mb-2">
+                ⚡ PV Power (kW)
+              </h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={historyPV}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="time"
+                    type="number"
+                    scale="time"
+                    domain={["auto", "auto"]}
+                    tickFormatter={(v) => dayjs(v).format("HH:mm")}
+                  />
+                  <YAxis />
+                  <Tooltip
+                    labelFormatter={(v) =>
+                      dayjs(v).format("YYYY-MM-DD HH:mm:ss")
+                    }
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="Power"
+                    stroke="#B4BA06"
+                    name="PV Power (kW)"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* ===== กราฟที่ 2 : Load ===== */}
+            <div>
+              <h3 className="text-center font-semibold mb-2">
+                🏠 Load (kW)
+              </h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={historyPV}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="time"
+                    type="number"
+                    scale="time"
+                    domain={["auto", "auto"]}
+                    tickFormatter={(v) => dayjs(v).format("HH:mm")}
+                  />
+                  <YAxis />
+                  <Tooltip
+                    labelFormatter={(v) =>
+                      dayjs(v).format("YYYY-MM-DD HH:mm:ss")
+                    }
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="Load"
+                    stroke="#ff4d4f"
+                    name="Load (kW)"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* ===== กราฟที่ 3 : Voltage + Current ===== */}
+            <div>
+              <h3 className="text-center font-semibold mb-2">
+                🔌 Voltage (V) & Current (A)
+              </h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={historyPV}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="time"
+                    type="number"
+                    scale="time"
+                    domain={["auto", "auto"]}
+                    tickFormatter={(v) => dayjs(v).format("HH:mm")}
+                  />
+                  <YAxis />
+                  <Tooltip
+                    labelFormatter={(v) =>
+                      dayjs(v).format("YYYY-MM-DD HH:mm:ss")
+                    }
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="Voltage"
+                    stroke="#06BABA"
+                    name="Voltage (V)"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="Current"
+                    stroke="#BA6006"
+                    name="Current (A)"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+          </div>
         )}
       </div>
     </div>
