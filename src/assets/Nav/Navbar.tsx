@@ -2,18 +2,8 @@ import { Link } from "react-router-dom";
 
 function Navbar() {
   return (
-    <div className="w-full bg-[#bbbbbb0] flex items-center justify-between px-[2%] shadow-sm h-[50px]">
-      <div className="h-full flex items-center">
-        <img
-          src="/bn.png"
-          className="h-full object-contain cursor-pointer mr-[1%] ml-[2%]"
-          alt="logo"
-        />
-        <h1 className="text-[#000000] text-[16px] font-bold ml-[1%] whitespace-nowrap">
-          B.N. Solar Power Co.,Ltd.
-        </h1>
-      </div>
-
+    <div className="w-full bg-[#bbbbbb0] flex items-center justify-end px-[2%] shadow-sm h-[50px]">
+      
       <div className="flex justify-end items-center pr-[5%]">
         <Link
           to="https://enerclo-atesspower.com/#/sys/login"

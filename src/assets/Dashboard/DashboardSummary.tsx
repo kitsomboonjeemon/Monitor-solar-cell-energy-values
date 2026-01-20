@@ -96,8 +96,8 @@ function DashboardSummary() {
 
 
   return (
-    <div className="flex px-[2%] mt-[3%]">
-      <div className="w-[50%] h-full bg-[#ffffff] mt-[2%] rounded-[20px] p-[2%] ">
+    <div className="flex px-[3%] ">
+      <div className="w-[50%] h-[300px] bg-[#ffffff] mt-[2%] rounded-[20px] p-[2%] ">
         <div className="grid grid-cols-3 gap-[2%] justify-center items-center">
           <div className="text-center flex flex-col items-center leading-none">
             <div className="flex items-center justify-center">
@@ -199,7 +199,7 @@ function DashboardSummary() {
         </div>
       </div>
 
-      <div className="w-[50%] h-full bg-[#ffffff] mt-[2%] ml-[1%] justify-start rounded-[20px] p-[2%]">
+      <div className="w-[50%] h-[300px] bg-[#ffffff] mt-[2%] ml-[1%] justify-start rounded-[20px] p-[2%]">
         <div className="grid grid-cols-2 gap-[2%]">
           <div className="text-center">
             <h2 className="text-[#000000] text-[18px]">Output Freq (Hz)</h2>
@@ -209,7 +209,7 @@ function DashboardSummary() {
             </span>
             <p className="text-[#000000] text-[16px]">ความถี่ (Hz)</p>
 
-            <div className="mt-[5%]">
+            <div className="mt-[15%]">
               <h2 className="text-[#000000] text-[24px]">Shine master</h2>
               <div className="flex gap-[10%] justify-center">
                 <div className="text-center">
@@ -230,7 +230,7 @@ function DashboardSummary() {
             </div>
           </div>
 
-          <div>
+          <div className="mt-[5%] ml-[5%]">
             <h2 className="text-[#000000] text-[24px]">Social Contribution</h2>
             <div>
               <div className="flex items-center mb-[10px]">
