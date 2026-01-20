@@ -1,20 +1,20 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import './index.css'
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-import App from './Home.tsx'
-import Index from './assets/Index.tsx'
 
-createRoot(document.getElementById('root')!).render(
+import "./index.css"; 
+
+import App from "./Home";
+import Index from "./assets/Index";
+
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
-        <Route path="/home" element={<Index />} />
         <Route path="/" element={<App />} />
+        <Route path="/home" element={<Index />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>
-)
-
-
+);

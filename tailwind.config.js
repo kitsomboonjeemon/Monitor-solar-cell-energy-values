@@ -1,6 +1,4 @@
 /** @type {import('tailwindcss').Config} */
-import "antd/dist/antd.min.css";
-
 export default {
   content: [
     "./index.html",
@@ -10,4 +8,4 @@ export default {
     extend: {},
   },
   plugins: [],
-}
+};
